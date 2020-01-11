@@ -3,7 +3,7 @@ project(DistributedDB)
 
 set(CMAKE_CXX_STANDARD 20)
 
-include_directories(inc/)
 file(GLOB CXX_EXEC "src/*.cpp")
 
 add_executable(DistributedDB ${CXX_EXEC})
+target_include_directories(DistributedDB PUBLIC inc/)
