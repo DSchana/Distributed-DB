@@ -1,8 +1,8 @@
-#include <DMap.h>
+#include <dmap.h>
 #include <iostream>
 
 int main() {
-    DMap<int, int> map;
+    dmap<int, int> map;
 
     map[4] = 1;
     map[3] = 2;
