@@ -31,7 +31,7 @@ void dmap<K, V>::insert(K key, V value) {
 
 template <class K, class V>
 void dmap<K, V>::erase(K key) {
-    typename std::map<K, V>::iterator it = data.begin();
+    typename std::map<K, V>::iterator it;
     if ((it = data.find(key)) != data.end())
         data.erase(it);
 }

@@ -9,6 +9,9 @@ int main() {
     map[1] = 5;
 
     std::cout << (map.find(2) ? "yes" : "no") << std::endl;
+    std::cout << map[3] << std::endl;
+    map[3] = 8;
+    std::cout << map[3] << std::endl;
 
     return 0;
 }
