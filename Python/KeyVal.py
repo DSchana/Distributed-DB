@@ -1,7 +1,5 @@
 '''
 Matthew Farias
-104600696
-fariasm
 Assignment1
 COMP-4680
 '''
