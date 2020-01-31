@@ -1,61 +1,83 @@
+/* Abdullah Arif
+* COMP-4680
+* Client class that will connect to the server 
+* implements all the basic key store operations */
+
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import java.io.BufferedReader;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.PrintStream;
-import java.net.*;
-import java.util.*;
-import com.google.gson.*;
+import java.net.InetAddress;
+import java.net.Socket;
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Scanner;
 
 public class Client {
+
     public static Gson gson; // object for JSON conversion
     private static Scanner sc;
-    public static void main(String args[]) 
-    {
-        if (args.length != 1) {
-            System.err.println("Pass the server IP as the sole command line argument");
-            return;
-        }
+
+    public static void main(String[] args) {
         gson = new GsonBuilder().create();
         sc = new Scanner(System.in);
-        runClient(args[0]);  
-    } 
-    
+        String serverIP = "127.0.1.1"; //default loop back
+        int socketNumber = 2000;
+        try {
+            // Open configuration file
+            BufferedReader br = new BufferedReader(new FileReader("Client.config"));
+            serverIP = br.readLine().trim();
+            socketNumber = Integer.parseInt(br.readLine().trim());
+        } catch (IOException e) {
+            System.err.println(
+                "Check to make sure Client.config is in directory and client has read permission");
+            e.printStackTrace();
+        } catch (NumberFormatException e) {
+            System.err.println("Make sure the Client.config file is in correct format");
+            System.err.println("First Line holds server ip: X.X.X.X where X is an integer between 0-255");
+            System.err.println("Second line holds socket number: default 2000");
+            e.printStackTrace();
+        }
+        runClient(serverIP, socketNumber);
+    }
+
     /* Main program for client - connect to server */
-    public static void runClient(String socketIP){
-        int command = 8 ;  // hold clients command
-        String[] commandList ={"insert","update","upSert", "get", "delete", "find", "clear", "count"};
-        String serverResponse; // hold server response 
-        String output;
-        // Connect to a server using the IP address and port # 
-        /** need to change so socket is read in from configuration file */
-        try (Socket serverSocket = new Socket(InetAddress.getByName(socketIP),Server.SOCKET_NUMBER)) {
+    public static void runClient(String socketIP, int socketNumber) {
+        int command = 8;  // hold clients command
+        String[] commandList = {"insert", "update", "upSert", "get", "delete", "find", "clear",
+            "count"};
+        String serverResponse; // hold server response
+        String output = "";
+        // Connect to a server using the IP address and port #
+        try (Socket serverSocket = new Socket(InetAddress.getByName(socketIP), socketNumber)) {
             //Link to server
             PrintStream p = new PrintStream(serverSocket.getOutputStream());
             Scanner serverScanner = new Scanner(serverSocket.getInputStream());
-            while(serverSocket.getInetAddress().isReachable(10)){
-                if(command <9){
-                    // unfortunately Java's scanner is horrible with detecting input when used over a socket
-                    while(serverScanner.hasNextLine() ){ 
-                        serverResponse = serverScanner.nextLine();
-                        if(serverResponse.trim().equals("END"))
-                            break;
+            while (serverScanner.hasNextLine()) {
+                // unfortunately Java's scanner is horrible with detecting input when used over a socket
+                if (command < 9)
+                    while (!(serverResponse = serverScanner.nextLine()).trim().equals("END"))
                         System.out.println(serverResponse);
-                    }           
-                }
                 userPrompt();
                 command = sc.nextInt(); //if user entered number then get
-                sc.nextLine(); // clear line 
-                if(command == 0){ // quit
+                sc.nextLine(); // clear line
+                // quit
+                if (command == 0)
                     break;
-                }
-                else if(command <7){
+                else if (command < 7) {
                     System.out.println("Enter all the argument you want to send and enter SEND to send");
-                    if(command < 4) //Handle all the one input stuff
+                    if (command < 4) //Handle all the one input stuff
                         output = twoInput();
-                    else//Handle the two argument commands
+                    else //Handle the two argument commands
                         output = oneInput();
                 }
-                if(command < 9){
-                    p.println(commandList[command-1]);
-                    System.out.println(commandList[command-1]);
+                if (command < 9) {
+                    p.println(commandList[command - 1]);
+                    System.out.println(commandList[command - 1]);
                     p.println(output);
                     p.println("END");
                     System.out.println(output);
@@ -64,14 +86,14 @@ public class Client {
             }
             sc.close();
             System.out.println("Successfully exited client");
-        }catch (IOException  e) {
+        } catch (IOException e) {
             System.out.println("Socket could not be created, check processes permissions");
-            System.err.println(e);
+            e.printStackTrace();
         }
     }
 
     /* prompt for the client */
-    private static void userPrompt(){
+    private static void userPrompt() {
         System.out.println("Select a command to enter or 0 to quit");
         System.out.println("1.Insert - Create a new key-value pairs");
         System.out.println("2.Update - update key value pairs");
@@ -84,30 +106,24 @@ public class Client {
     }
 
     /* Handle the functions with one arguments, used ArrayDeque instead a linked list because it is more efficient*/
-    private static String oneInput(){
+    private static String oneInput() {
         String input;
-        Deque<String> keys = new ArrayDeque<String>();
+        Deque<String> keys = new ArrayDeque<>();
         System.out.println("Enter the list of keys");
-        while(sc.hasNextLine()){
-            input = sc.nextLine();
-            if(input.equals("SEND"))
-                break;
-            keys.add(input); // ** If it was a different type I could potentially cast it*
-        }
+        while (sc.hasNextLine() && !(input = sc.nextLine()).equals("SEND"))
+            keys.add(input); 
         return gson.toJson(keys);
     }
 
-    private static String twoInput(){
+    /* Handles function with one parameter, Use HashMap to store functions  */
+    private static String twoInput() {
         String input;
-        Map<String, String> pairs = new HashMap<String, String>();
+        Map<String, String> pairs = new HashMap<>();
         System.out.println("Enter the list of key value pairs");
         System.out.println("Separate them with a comma (e.g. key, value)");
-        while(sc.hasNextLine()){
-            input = sc.nextLine();
-            if(input.equals("SEND"))
-                break;
+        while (sc.hasNextLine() && !(input = sc.nextLine()).equals("SEND")) {
             String[] argument = input.split(",");
-            pairs.put(argument[0],argument[1]); 
+            pairs.put(argument[0], argument[1]);
         }
         return gson.toJson(pairs);
     }
