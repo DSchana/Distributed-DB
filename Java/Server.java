@@ -1,21 +1,19 @@
 import java.util.*;
-import java.util.concurrent.Executors; // 
+import java.util.concurrent.Executors; // Used to for controlled multi-threading
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.net.*;
 import java.io.*;
 import java.lang.reflect.*; // Holds the type class
-import com.google.gson.*;  // 
+import com.google.gson.*;  // used for JSON serialization and deserialization
 import com.google.gson.reflect.*;
 
 public class Server{
     public static final int SOCKET_NUMBER = 2000;
     public static final int NUMBER_CLIENTS = 25;
-    public static Set<PrintStream> client= new HashSet<>(); //list of player for broadcast
-    public static Gson gson;
-    // Key Value store
-    public static KeyValueStore<String, Object> kvs;
-    // controls Access to key-value store
-    public static AtomicBoolean metaLock; 
+    public static Set<PrintStream> client= new HashSet<>(); 
+    public static Gson gson; // Object used JSON conversion
+    private static KeyValueStore<String, Object> kvs;  // Key Value store
+    private static AtomicBoolean metaLock; // controls Access to key-value store
     public static void main(String[] args){
         kvs = new KeyValueStore<String, Object>();
         metaLock = new AtomicBoolean(false); 
