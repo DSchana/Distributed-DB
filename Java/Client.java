@@ -5,10 +5,9 @@ import java.util.*;
 import com.google.gson.*;
 
 public class Client {
-    public static Gson gson;
-    private static String  input,output; 
+    public static Gson gson; // object for JSON conversion
     private static Scanner sc;
-    public static void main(String args[]) throws UnknownHostException, IOException
+    public static void main(String args[]) 
     {
         if (args.length != 1) {
             System.err.println("Pass the server IP as the sole command line argument");
@@ -20,21 +19,22 @@ public class Client {
     } 
     
     /* Main program for client - connect to server */
-    private static void runClient(String socketIP){
+    public static void runClient(String socketIP){
         int command = 8 ;  // hold clients command
         String[] commandList ={"insert","update","upSert", "get", "delete", "find", "clear", "count"};
         String serverResponse; // hold server response 
-
-        // Connect to a server using the IP address and port #
+        String output;
+        // Connect to a server using the IP address and port # 
+        /** need to change so socket is read in from configuration file */
         try (Socket serverSocket = new Socket(InetAddress.getByName(socketIP),Server.SOCKET_NUMBER)) {
             //Link to server
             PrintStream p = new PrintStream(serverSocket.getOutputStream());
-            Scanner sc1 = new Scanner(serverSocket.getInputStream());
+            Scanner serverScanner = new Scanner(serverSocket.getInputStream());
             while(serverSocket.getInetAddress().isReachable(10)){
                 if(command <9){
                     // unfortunately Java's scanner is horrible with detecting input when used over a socket
-                    while(sc1.hasNextLine() ){ 
-                        serverResponse = sc1.nextLine();
+                    while(serverScanner.hasNextLine() ){ 
+                        serverResponse = serverScanner.nextLine();
                         if(serverResponse.trim().equals("END"))
                             break;
                         System.out.println(serverResponse);
@@ -85,6 +85,7 @@ public class Client {
 
     /* Handle the functions with one arguments, used ArrayDeque instead a linked list because it is more efficient*/
     private static String oneInput(){
+        String input;
         Deque<String> keys = new ArrayDeque<String>();
         System.out.println("Enter the list of keys");
         while(sc.hasNextLine()){
@@ -97,6 +98,7 @@ public class Client {
     }
 
     private static String twoInput(){
+        String input;
         Map<String, String> pairs = new HashMap<String, String>();
         System.out.println("Enter the list of key value pairs");
         System.out.println("Separate them with a comma (e.g. key, value)");
@@ -109,29 +111,4 @@ public class Client {
         }
         return gson.toJson(pairs);
     }
-
-    /*
-    private static class ServerInputHandler extends Thread {
-        private Socket serverSocket;
-        private Scanner sc1;
-        
-        ServerInputHandler(Socket serverSocket) {
-            this.serverSocket = serverSocket;
-        }
-        @Override
-        public void run() {
-            try{ 
-                sc1 = new Scanner(serverSocket.getInputStream());
-                while(!this.isInterrupted()){
-                    serverCanPrint.lazySet(sc1.hasNextLine()); //signal to main thread that server want to send message
-                    // && allowServerPrint.get()
-                    if(sc1.hasNextLine() ) // Main thread will let server know when it is safe to print
-                        System.out.println(sc1.nextLine());    
-                }
-            }catch (IOException e){
-                System.err.println(e);
-            } 
-        }
-    }*/
-
 }
