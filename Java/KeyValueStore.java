@@ -1,6 +1,7 @@
 // Abdullah Arif
 // Custom key value store structure for COMP-4680
 // T is the type for the key and G is the type for the Value
+
 import java.util.*;
 import com.google.gson.*;
 public class KeyValueStore<T,G>{
@@ -11,7 +12,7 @@ public class KeyValueStore<T,G>{
     }
 
     // Insert ​- enables the user to insert a key and corresponding value into the store
-    public void Insert(T key, G value){
+    public synchronized void insert(T key, G value){
         map.put(key, value);
     }
 
@@ -21,7 +22,7 @@ public class KeyValueStore<T,G>{
     }
 
     // Delete ​- enables the user to delete a value from the store using the corresponding key.
-    public G delete(T key){
+    public synchronized G delete(T key){
         return map.remove(key);
     }
 
@@ -30,7 +31,7 @@ public class KeyValueStore<T,G>{
         return map.containsKey(key);
     }
     // Update ​- enables the user to update the value of an existing key.
-    public boolean update(T key, G newValue){
+    public synchronized boolean update(T key, G newValue){
         if(map.containsKey(key)){
             map.replace(key, newValue);
             return true;
@@ -40,15 +41,18 @@ public class KeyValueStore<T,G>{
 
     // UpSert - enables the user to update the value of an existing key and if the key does not exist,
     // it will insert the new value with the corresponding key
-    public void upSert(T key, G newValue){
-        if(map.containsKey(key))
+    public synchronized boolean upSert(T key, G newValue){
+        if(map.containsKey(key)){
             map.replace(key, newValue);
-        else // if there was no previous value
-            map.put(key,newValue);
+            return false; // key was not create
+        }
+       // if there was no previous value
+        map.put(key,newValue);
+        return true;
     }
 
     //Clear ​- enables​​ the user to remove all the  key-value items stored in the key-value store
-    public void clear(){
+    public synchronized void clear(){
         map.clear();
     }
 
