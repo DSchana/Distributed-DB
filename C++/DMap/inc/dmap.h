@@ -1,15 +1,21 @@
 #ifndef DMAP_H
 #define DMAP_H
 
-#include <map>
+#include <atomic>
 #include <base64.h>
+#include <future>
+#include <map>
+#include <NetworkManager.h>
 
 template <class K, class V>
 class dmap {
     std::map<K, V> data;
+    NetworkManager nm;
+    std::future<int> nm_future;
 
 public:
     dmap();
+    ~dmap();
     void insert(K key, V value);
     void erase(K key);
     bool find(K key);
@@ -22,7 +28,14 @@ public:
 };
 
 template <class K, class V>
-dmap<K, V>::dmap() = default;
+dmap<K, V>::dmap() {
+    nm_future = std::async(std::launch::async, &NetworkManager::start, &nm);
+}
+
+template <class K, class V>
+dmap<K, V>::~dmap() {
+
+}
 
 template <class K, class V>
 void dmap<K, V>::insert(K key, V value) {

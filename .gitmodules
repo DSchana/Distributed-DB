@@ -1,0 +1,6 @@
+[submodule "C++/submodules/rapidjson"]
+	path = C++/submodules/rapidjson
+	url = https://github.com/Tencent/rapidjson.git
+[submodule "C++/DMap/submodules/rapidjson"]
+	path = C++/DMap/submodules/rapidjson
+	url = https://github.com/Tencent/rapidjson.git
