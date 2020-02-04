@@ -2,6 +2,7 @@
 #include <cstring>
 #include <iostream>
 #include <NetworkManager.h>
+#include <rapidjson/document.h>
 
 NetworkManager::NetworkManager() {
     memset(&serv, 0, sizeof(serv));
@@ -52,6 +53,8 @@ int NetworkManager::stop() {
 }
 
 int NetworkManager::handleConnection() {
+    using namespace rapidjson;
+
     // Since call to accept is blocking, the connection mutex will stay locked until
     // a connection is accepted which means a new connection thread will always be
     // ready to replace the old one, allowing for multiple async connections.
@@ -60,7 +63,7 @@ int NetworkManager::handleConnection() {
     connection_mutex.unlock();
 
     if (consock) {
-        char buf[100];
+        char buf[500];
 
         data_recv_mutex.lock();
         recv(consock, buf, 99, 0);
@@ -68,6 +71,8 @@ int NetworkManager::handleConnection() {
 
         // TODO: Do something useful with data from socket
         std::cout << "Msg: " << buf << std::endl;
+        Document payload;
+        payload.Parse(buf);
     }
     else {
         return -1;
