@@ -10,7 +10,7 @@ class Client:
             self.sock.send(bytes(input(""), 'utf-8'))
     
     def __init__(self, address):
-        self.sock.connect((address, 8000))
+        self.sock.connect((address, 8001))
 
         #iThread= input thread
         iThread = threading.Thread(target=self.sendMsg)
