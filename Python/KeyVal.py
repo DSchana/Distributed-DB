@@ -5,48 +5,49 @@ COMP-4680
 '''
 class KeyVal:
     dic={}
-    def Create(self):
+    def create(self):
         self.dic={}
         return 'Successful'
     
-    def Insert(self, k, v):    
+    def insert(self, k, v):    
         if k not in self.dic:
             self.dic[k]=v
             return 'Successful'
         return 'Key already exists'
     
-    def Get(self, k):
+    def get(self, k):
         if k in self.dic:
             return self.dic[k]
         else:
             return 'Key does not exist'
     
-    def Delete(self, k):
+    def delete(self, k):
         if k in self.dic:
             self.dic.pop(k)
             return 'Successful'
         else:
             return 'Key does not exist'
             
-    def Find(self, k):
+    def find(self, k):
         return k in self.dic
 
-    def Update(self, k, v):
+    def update(self, k, v):
         if k in self.dic:
             self.dic[k] = v
             return 'Successful'
         else:
             return 'Key does not exist'
     
-    def UpSert(self, k, v):
+    def upSert(self, k, v):
         self.dic[k]=v
         return 'Successful'
-    def Clear(self):
+
+    def clear(self):
         self.dic.clear()
         return 'KeyVal Cleared'
 
-    def Count(self):
+    def count(self):
         return len(self.dic)
-    def View(self):
-        return str(self.dic)
 
+    def view(self):
+        return str(self.dic)
