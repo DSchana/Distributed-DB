@@ -3,6 +3,7 @@
 import socket
 import threading
 from KeyVal import *
+import sys
 
 class Server:
     #AF_INET says we're using IPV4
@@ -22,11 +23,12 @@ class Server:
         arr=s.split()
         command=arr[0]+'('
         for i in range(1,len(arr)):
-            try:
-                int(arr[i])
-                command+=arr[i]
-            except:
-                command+="'"+arr[i]+"'"
+            # try:
+            #     int(arr[i])
+            #     command+=arr[i]
+            # except:
+            #     command+="'"+arr[i]+"'"
+            command += "'"+arr[i]+"'"
             if i<len(arr)-1:
                 command+=','
         command+=')'
@@ -49,6 +51,7 @@ class Server:
             try:
                 data = c.recv(1024)
                 text = str(data, 'utf-8')
+                if text == 'exit': sys.exit(0)
                 result = self.convert(text,c)
                 #print(str(data,'utf-8'))
                 c.send(bytes(result.encode()))
