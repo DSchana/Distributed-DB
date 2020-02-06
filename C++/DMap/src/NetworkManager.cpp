@@ -73,6 +73,8 @@ int NetworkManager::handleConnection() {
         std::cout << "Msg: " << buf << std::endl;
         Document payload;
         payload.Parse(buf);
+
+        std::string cmd = payload.GetString();
     }
     else {
         return -1;

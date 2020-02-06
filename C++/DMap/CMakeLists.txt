@@ -9,6 +9,5 @@ find_package(RapidJSON)
 file(GLOB CXX_EXEC "src/*.cpp")
 
 add_library(DMap SHARED ${CXX_EXEC})
-target_include_directories(DMap PUBLIC
-                            inc/
-                            submodules/rapidjson/include)
+target_include_directories(DMap PUBLIC inc/)
+target_include_directories(DMap PRIVATE submodules/rapidjson/include)
