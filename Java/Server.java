@@ -93,13 +93,13 @@ public class Server {
     }
 
     public static String delete(String key) {
-            if (!kvs.find(key))
-                return "ERROR: The key " + key + ", does not exist in the database, cannot delete";
-            while (metaLock.get()) ; // stay until lock is free
-            metaLock.lazySet(true); // set lock
-            String deletedValue = kvs.delete(key).toString();
-            metaLock.lazySet(false); // free up lock
-            return "The value of the deleted key " + key + " was " + deletedValue;
+        if (!kvs.find(key))
+            return "ERROR: The key " + key + ", does not exist in the database, cannot delete";
+        while (metaLock.get()) ; // stay until lock is free
+        metaLock.lazySet(true); // set lock
+        String deletedValue = kvs.delete(key).toString();
+        metaLock.lazySet(false); // free up lock
+        return "The value of the deleted key " + key + " was " + deletedValue;
     }
 
     public static boolean find(String key) {
@@ -107,10 +107,10 @@ public class Server {
     }
 
     public static String update(String key, Object value) {
-            if (kvs.update(key, value))
-                return "Successfully updated key " + key + "!";
-            else
-                return "Error: Key not found, server could not update :(";
+        if (kvs.update(key, value))
+            return "Successfully updated key " + key + "!";
+        else
+            return "Error: Key not found, server could not update :(";
     }
 
     public static String upSert(String key, Object value) {
@@ -122,13 +122,13 @@ public class Server {
     }
 
     public static String clear() {
-            if (count() == 0)
-                return "Key-value store is already empty!";
-            while (metaLock.get()) ; // stay until lock is free
-            metaLock.lazySet(true); // set lock to take control of Key-Value store
-            kvs.clear();
-            metaLock.lazySet(false); // free up lock
-            return "You cleared the Key-Value Store O.O";
+        if (count() == 0)
+            return "Key-value store is already empty!";
+        while (metaLock.get()) ; // stay until lock is free
+        metaLock.lazySet(true); // set lock to take control of Key-Value store
+        kvs.clear();
+        metaLock.lazySet(false); // free up lock
+        return "You cleared the Key-Value Store O.O";
     }
 
     public static int count() {
@@ -172,11 +172,11 @@ public class Server {
                 System.out.println("Error:" + socket);
                 e.printStackTrace();
             } finally {
-                    if (p != null)
-                        client.remove(p);
-                    try {socket.close();
-                    } catch (IOException e) { e.printStackTrace();}
-                    System.out.println("Closed: " + socket);
+                if (p != null)
+                    client.remove(p);
+                try {socket.close();
+                } catch (IOException e) { e.printStackTrace();}
+                System.out.println("Closed: " + socket);
             }
         }
 
