@@ -4,6 +4,7 @@
 int main() {
     dmap<int, int> map;
 
+    /*
     map[4] = 1;
     map[3] = 2;
     map[1] = 5;
@@ -12,6 +13,7 @@ int main() {
     std::cout << map[3] << std::endl;
     map[3] = 8;
     std::cout << map[3] << std::endl;
+     */
 
     return 0;
 }
