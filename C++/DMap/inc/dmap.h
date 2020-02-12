@@ -181,43 +181,23 @@ bool dmap<K, V>::isJSONValid(rapidjson::Document doc) {
         return false;
     }
 
+    std::string command = doc["command"].GetString();
     for (auto& payload : payloads.GetArray()) {
-        std::string command = doc["command"].GetString();
-        if (command == "insert") {
+        if (command == "insert" || command == "update" || command == "upsert") {  // Needs key and value
             if (!payload.HasMember("key") || !payload.HasMember("value")) {
                 return false;
             }
         }
-        else if (command == "get") {
+        else if (command == "get" || command == "delete" || command == "find") {  // Needs key only
             if (!payload.HasMember("key")) {
                 return false;
             }
         }
-        else if (command == "delete") {
-            if (!payload.HasMember("key")) {
-                return false;
-            }
+        else if (command == "clear" || command == "count") {  // Needs nothing
+            continue;
         }
-        else if (command == "find") {
-            if (!payload.HasMember("key")) {
-                return false;
-            }
-        }
-        else if (command == "update") {
-            if (!payload.HasMember("key") || !payload.HasMember("value")) {
-                return false;
-            }
-        }
-        else if (command == "upsert") {
-            if (!payload.HasMember("key") || !payload.HasMember("value")) {
-                return false;
-            }
-        }
-        else if (command == "clear") {
-
-        }
-        else if (command == "count") {
-
+        else {
+            return false;
         }
     }
 
@@ -242,10 +222,51 @@ int dmap<K, V>::handleConnection() {
         recv(consock, buf, 99, 0);
         data_recv_mutex.unlock();
 
-        // TODO: Do something useful with data from socket
         std::cout << "Msg: " << buf << std::endl;
         Document doc;
         doc.Parse(buf);
+
+        if (!isJSONValid(doc)) {
+            return -1;
+        }
+
+        // TODO: Do something useful with data from socket
+        Value payloads(kArrayType);
+
+        if (doc["payload"].IsArray()) {
+            payloads = doc["payload"].GetArray();
+        }
+        else if (doc["payload"].IsObject()) {
+            payloads.PushBack(doc["payload"].GetObject(), doc.GetAllocator());
+        }
+
+        std::string command = doc["command"].GetString();
+        for (auto& payload : payloads.GetArray()) {
+            if (command == "insert") {
+
+            }
+            else if (command == "get") {
+
+            }
+            else if (command == "delete") {
+
+            }
+            else if (command == "find") {
+
+            }
+            else if (command == "update") {
+
+            }
+            else if (command == "upsert") {
+
+            }
+            else if (command == "clear") {
+                clear();
+            }
+            else if (command == "count") {
+                // TODO: Respond with size()
+            }
+        }
     }
     else {
         return -1;
