@@ -2,7 +2,7 @@
 #include <iostream>
 
 int main() {
-    dmap<int, int> map;
+    dmap<std::string, std::string> map;
 
     /*
     map[4] = 1;
