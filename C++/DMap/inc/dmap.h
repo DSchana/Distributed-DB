@@ -77,16 +77,37 @@ dmap<K, V>::~dmap() {
 
 }
 
+/**
+ * Store a new key value pair
+ *
+ * @param   Key to store the value at
+ * @param   Value to store
+ */
 template <class K, class V>
 void dmap<K, V>::insert(K key, V value) {
     data[key] = value;
 }
 
+/**
+ * Get value stored at key
+ *
+ * @param   Key whose value to get
+ *
+ * @return  Reference to value stored at key
+ */
 template <class K, class V>
 V& dmap<K, V>::get(K key) {
     return data[key];
 }
 
+/**
+ * Erase key-value pair at key
+ *
+ * @param   Key where to erase
+ *
+ * @return  True is pair was erased
+ *          False if key-value pair could not be found
+ */
 template <class K, class V>
 bool dmap<K, V>::erase(K key) {
     typename std::map<K, V>::iterator it;
@@ -97,11 +118,28 @@ bool dmap<K, V>::erase(K key) {
     return false;
 }
 
+/**
+ * Check if key exists
+ *
+ * @param   Key to check
+ *
+ * @return  True if key was found
+ *          False if key was not found
+ */
 template <class K, class V>
 bool dmap<K, V>::find(K key) {
     return data.find(key) != data.end();
 }
 
+/**
+ * Update value at key
+ *
+ * @param   Key whose value to update
+ * @param   New value to be stored
+ *
+ * @return  True if key is found
+ *          False if key is not found
+ */
 template <class K, class V>
 bool dmap<K, V>::update(K key, V value) {
     if (find(key)) {
@@ -111,16 +149,31 @@ bool dmap<K, V>::update(K key, V value) {
     return false;
 }
 
+/**
+ * Update the value of key if it exists, create a new
+ * entry in the store if key does not exist
+ *
+ * @param   Key whose value to upSert
+ * @param   Value to be stored
+ */
 template <class K, class V>
 void dmap<K, V>::upsert(K key, V value) {
     data[key] = value;
 }
 
+/**
+ * Remove all key-value pairs
+ */
 template <class K, class V>
 void dmap<K, V>::clear() {
     data.clear();
 }
 
+/**
+ * Get the number of key-value pairs stored
+ *
+ * @return  Number of key-value pairs
+ */
 template <class K, class V>
 int dmap<K, V>::size() {
     return data.size();
@@ -133,6 +186,10 @@ V& dmap<K, V>::operator[](K key) {
 
 /// Networking
 
+/**
+ * Launch network connection manager. This will launch and
+ * manage connections on separate threads.
+ */
 template <class K, class V>
 int dmap<K, V>::start() {
     bind(sock, (struct sockaddr *) &serv, sizeof(struct sockaddr));
@@ -161,6 +218,9 @@ int dmap<K, V>::start() {
     return 0;
 }
 
+/**
+ * Kill and clean up the network connection manager thread
+ */
 template <class K, class V>
 int dmap<K, V>::stop() {
     running = false;
@@ -168,6 +228,14 @@ int dmap<K, V>::stop() {
     return 0;
 }
 
+/**
+ * Check if JSON is valid according to the communication protocol wiki
+ *
+ * @param   JSON object to be checked
+ *
+ * @return  True if doc is valid
+ *          False if any errors are found in its format
+ */
 template <class K, class V>
 bool dmap<K, V>::isJSONValid(rapidjson::Document& doc) {
     using namespace rapidjson;
@@ -213,6 +281,15 @@ bool dmap<K, V>::isJSONValid(rapidjson::Document& doc) {
     return true;
 }
 
+/**
+ * Instance of server infrastructure waiting for a command
+ * to come from a client. Checks if the message fits the
+ * standard outlined by the communications protocol and
+ * executes the request if it does.
+ *
+ * @return  0   if request successfully executied
+ *          <0 otherwise
+ */
 template <class K, class V>
 int dmap<K, V>::handleConnection() {
     using namespace rapidjson;
@@ -235,7 +312,15 @@ int dmap<K, V>::handleConnection() {
         Document doc;
         doc.Parse(buf);
 
+        Value response(kObjectType);
+
+        if (doc.HasMember("id") && doc["id"].IsString()) {
+            response.AddMember("id", Value(doc["id"].GetString(), doc.GetAllocator()), doc.GetAllocator());
+        }
+
         if (!isJSONValid(doc)) {
+            response.AddMember("status", 400, doc.GetAllocator());
+
             return -1;
         }
 
@@ -247,9 +332,6 @@ int dmap<K, V>::handleConnection() {
         else if (doc["payload"].IsObject()) {
             payloads.PushBack(doc["payload"].GetObject(), doc.GetAllocator());
         }
-
-        Value response(kObjectType);
-        response.AddMember("id", Value(doc["id"].GetString(), doc.GetAllocator()), doc.GetAllocator());
 
         Value return_array(kArrayType);
         std::string command = doc["command"].GetString();
@@ -267,7 +349,7 @@ int dmap<K, V>::handleConnection() {
             }
             else if (command == "get") {
                 std::string key = payload["key"].GetString();
-                std::string value = get(key);  // TODO: Return this
+                std::string value = get(key);
 
                 return_value.AddMember("status", 200, doc.GetAllocator());
                 return_value.AddMember("value", Value(value.c_str(), value.size()), doc.GetAllocator());
