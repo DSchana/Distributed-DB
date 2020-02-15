@@ -6,6 +6,7 @@
 #include <base64.h>
 #include <cstring>
 #include <future>
+#include <fstream>
 #include <iostream>
 #include <map>
 #include <netinet/in.h>
@@ -36,7 +37,7 @@ class dmap {
     int handleConnection();
 
 public:
-    dmap();
+    dmap(std::string config_path = "./ddb.config");
     ~dmap();
     void insert(K key, V value);
     V& get(K key);
@@ -53,19 +54,32 @@ public:
     // Networking
     bool isJSONValid(rapidjson::Document& doc);
 
-    int start();
-    int stop();
+    int start( );
+     int stop();
 };
 
 template <class K, class V>
-dmap<K, V>::dmap() {
+dmap<K, V>::dmap(std::string config_path) {
+    using namespace rapidjson;
+
     running = true;
-    // TODO: Read port from config file
+
+    std::ifstream s_config(config_path, std::ifstream::in);
+    std::string ddb_config((std::istreambuf_iterator<char>(s_config)), std::istreambuf_iterator<char>());
+
+    uint8_t port = -1;
+
+    Document config_json;
+    config_json.Parse(ddb_config.c_str());
+
+    if (config_json.HasMember("port") && config_json["port"].IsUint()) {
+        port = config_json["port"].GetUint();
+    }
 
     memset(&serv, 0, sizeof(serv));
     serv.sin_family = AF_INET;
     serv.sin_addr.s_addr = htonl(INADDR_ANY);
-    serv.sin_port = htons(8061);
+    serv.sin_port = htons(port);
 
     sock = socket(AF_INET, SOCK_STREAM, 0);
 
