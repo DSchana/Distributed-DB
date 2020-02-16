@@ -6,15 +6,19 @@
 #include <base64.h>
 #include <cstring>
 #include <future>
+#include <fstream>
 #include <iostream>
 #include <map>
+#include <mutex>
 #include <netinet/in.h>
 #include <rapidjson/document.h>
+#include <rapidjson/stringbuffer.h>
+#include <rapidjson/writer.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <unistd.h>
 #include <vector>
-#include <mutex>
 
 template <class K, class V>
 class dmap {
@@ -36,7 +40,7 @@ class dmap {
     int handleConnection();
 
 public:
-    dmap();
+    dmap(std::string config_path = "./ddb.config");
     ~dmap();
     void insert(K key, V value);
     V& get(K key);
@@ -51,21 +55,35 @@ public:
     V& operator[](K key);
 
     // Networking
-    bool isJSONValid(rapidjson::Document& doc);
-
-    int start();
+    int start( );
     int stop();
 };
 
 template <class K, class V>
-dmap<K, V>::dmap() {
+dmap<K, V>::dmap(std::string config_path) {
+    using namespace rapidjson;
+
     running = true;
-    // TODO: Read port from config file
+
+    std::ifstream s_config(config_path, std::ifstream::in);
+    std::string ddb_config((std::istreambuf_iterator<char>(s_config)), std::istreambuf_iterator<char>());
+
+    unsigned int port = 0;
+
+    Document config_json;
+    config_json.Parse(ddb_config.c_str());
+
+    if (config_json.HasMember("port") && config_json["port"].IsUint()) {
+        port = config_json["port"].GetUint();
+    }
+    else {
+        // TODO: Throw error
+    }
 
     memset(&serv, 0, sizeof(serv));
     serv.sin_family = AF_INET;
     serv.sin_addr.s_addr = htonl(INADDR_ANY);
-    serv.sin_port = htons(8061);
+    serv.sin_port = htons(port);
 
     sock = socket(AF_INET, SOCK_STREAM, 0);
 
@@ -77,16 +95,37 @@ dmap<K, V>::~dmap() {
 
 }
 
+/**
+ * Store a new key value pair
+ *
+ * @param   Key to store the value at
+ * @param   Value to store
+ */
 template <class K, class V>
 void dmap<K, V>::insert(K key, V value) {
     data[key] = value;
 }
 
+/**
+ * Get value stored at key
+ *
+ * @param   Key whose value to get
+ *
+ * @return  Reference to value stored at key
+ */
 template <class K, class V>
 V& dmap<K, V>::get(K key) {
     return data[key];
 }
 
+/**
+ * Erase key-value pair at key
+ *
+ * @param   Key where to erase
+ *
+ * @return  True is pair was erased
+ *          False if key-value pair could not be found
+ */
 template <class K, class V>
 bool dmap<K, V>::erase(K key) {
     typename std::map<K, V>::iterator it;
@@ -97,11 +136,28 @@ bool dmap<K, V>::erase(K key) {
     return false;
 }
 
+/**
+ * Check if key exists
+ *
+ * @param   Key to check
+ *
+ * @return  True if key was found
+ *          False if key was not found
+ */
 template <class K, class V>
 bool dmap<K, V>::find(K key) {
     return data.find(key) != data.end();
 }
 
+/**
+ * Update value at key
+ *
+ * @param   Key whose value to update
+ * @param   New value to be stored
+ *
+ * @return  True if key is found
+ *          False if key is not found
+ */
 template <class K, class V>
 bool dmap<K, V>::update(K key, V value) {
     if (find(key)) {
@@ -111,16 +167,31 @@ bool dmap<K, V>::update(K key, V value) {
     return false;
 }
 
+/**
+ * Update the value of key if it exists, create a new
+ * entry in the store if key does not exist
+ *
+ * @param   Key whose value to upSert
+ * @param   Value to be stored
+ */
 template <class K, class V>
 void dmap<K, V>::upsert(K key, V value) {
     data[key] = value;
 }
 
+/**
+ * Remove all key-value pairs
+ */
 template <class K, class V>
 void dmap<K, V>::clear() {
     data.clear();
 }
 
+/**
+ * Get the number of key-value pairs stored
+ *
+ * @return  Number of key-value pairs
+ */
 template <class K, class V>
 int dmap<K, V>::size() {
     return data.size();
@@ -133,6 +204,10 @@ V& dmap<K, V>::operator[](K key) {
 
 /// Networking
 
+/**
+ * Launch network connection manager. This will launch and
+ * manage connections on separate threads.
+ */
 template <class K, class V>
 int dmap<K, V>::start() {
     bind(sock, (struct sockaddr *) &serv, sizeof(struct sockaddr));
@@ -141,14 +216,14 @@ int dmap<K, V>::start() {
     while (running) {
         if (connection_mutex.try_lock()) {
             connection_mutex.unlock();
-            connections.push_back(std::async(std::launch::async, &dmap<K, V>::handleConnection, this));  // TODO: Fix this
+            connections.push_back(std::async(std::launch::async, &dmap<K, V>::handleConnection, this));
         }
         else {
             std::vector<std::vector<std::future<int> >::iterator> expired_connections;
-            for (auto it = connections.begin(); it != connections.end(); it++) {
-                if (it->wait_for(std::chrono::microseconds(5)) == std::future_status::ready) {
-                    int status = it->get();
-                    expired_connections.push_back(it);
+            for (int i = 0; i < connections.size(); i++) {
+                if (connections[i].wait_for(std::chrono::microseconds(5)) == std::future_status::ready) {
+                    int status = connections[i].get();
+                    expired_connections.push_back(connections.begin() + i);
                 }
             }
 
@@ -161,6 +236,9 @@ int dmap<K, V>::start() {
     return 0;
 }
 
+/**
+ * Kill and clean up the network connection manager thread
+ */
 template <class K, class V>
 int dmap<K, V>::stop() {
     running = false;
@@ -168,8 +246,15 @@ int dmap<K, V>::stop() {
     return 0;
 }
 
-template <class K, class V>
-bool dmap<K, V>::isJSONValid(rapidjson::Document& doc) {
+/**
+ * Check if JSON is valid according to the communication protocol wiki
+ *
+ * @param   JSON object to be checked
+ *
+ * @return  True if doc is valid
+ *          False if any errors are found in its format
+ */
+bool isJSONValid(rapidjson::Document& doc) {
     using namespace rapidjson;
 
     if (!(doc.HasMember("id") && doc["id"].IsString()) ||
@@ -178,27 +263,19 @@ bool dmap<K, V>::isJSONValid(rapidjson::Document& doc) {
         return false;
     }
 
-    Value payloads(kArrayType);
-
-    if (doc["payload"].IsArray()) {
-        payloads = doc["payload"].GetArray();
-    }
-    else if (doc["payload"].IsObject()) {
-        payloads.PushBack(doc["payload"].GetObject(), doc.GetAllocator());
-    }
-    else {
+    if (!doc["payload"].IsArray()) {
         return false;
     }
 
     std::string command = doc["command"].GetString();
-    for (auto& payload : payloads.GetArray()) {
+    for (auto& payload : doc["payload"].GetArray()) {
         if (command == "insert" || command == "update" || command == "upsert") {  // Needs key and value
             if (!(payload.HasMember("key") && payload["key"].IsString()) || !(payload.HasMember("value") && payload["value"].IsString())) {
                 return false;
             }
         }
         else if (command == "get" || command == "delete" || command == "find") {  // Needs key only
-            if (!payload.HasMember("key")) {
+            if (!(payload.HasMember("key") && payload["key"].IsString())) {
                 return false;
             }
         }
@@ -213,6 +290,26 @@ bool dmap<K, V>::isJSONValid(rapidjson::Document& doc) {
     return true;
 }
 
+std::string getStringFromJSON(rapidjson::Value const& doc) {
+    rapidjson::StringBuffer buffer;
+
+    buffer.Clear();
+
+    rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+    doc.Accept(writer);
+
+    return std::string(strdup(buffer.GetString()));
+}
+
+/**
+ * Instance of server infrastructure waiting for a command
+ * to come from a client. Checks if the message fits the
+ * standard outlined by the communications protocol and
+ * executes the request if it does.
+ *
+ * @return  0   if request successfully executied
+ *          <0 otherwise
+ */
 template <class K, class V>
 int dmap<K, V>::handleConnection() {
     using namespace rapidjson;
@@ -224,107 +321,96 @@ int dmap<K, V>::handleConnection() {
     int consock = accept(sock, (struct sockaddr*)&dst, &sock_size);
     connection_mutex.unlock();
 
+    std::cout << "Handling connection" <<std::endl;
+
+    Value response(kObjectType);
+
     if (consock) {
-        char buf[500];
+        char buf[1000];
 
         data_recv_mutex.lock();
-        recv(consock, buf, 99, 0);
+        recv(consock, buf, 1000, 0);
         data_recv_mutex.unlock();
 
-        std::cout << "Msg: " << buf << std::endl;
         Document doc;
         doc.Parse(buf);
 
-        if (!isJSONValid(doc)) {
-            return -1;
+        if (doc.HasParseError() || !isJSONValid(doc)) {
+            response.AddMember("status", 400, doc.GetAllocator());
         }
+        else {
+            Value return_array(kArrayType);
+            std::string command = doc["command"].GetString();
 
-        Value payloads(kArrayType);
+            for (auto &payload : doc["payload"].GetArray()) {
+                Value return_value(kObjectType);
 
-        if (doc["payload"].IsArray()) {
-            payloads = doc["payload"].GetArray();
-        }
-        else if (doc["payload"].IsObject()) {
-            payloads.PushBack(doc["payload"].GetObject(), doc.GetAllocator());
-        }
+                if (command == "insert") {
+                    std::string key(payload["key"].GetString());
+                    std::string value(payload["value"].GetString());
 
-        Value response(kObjectType);
-        response.AddMember("id", Value(doc["id"].GetString(), doc.GetAllocator()), doc.GetAllocator());
+                    insert(key, value);
+                    std::cout << "Inserted " << key << ": " << get(key) << std::endl;
 
-        Value return_array(kArrayType);
-        std::string command = doc["command"].GetString();
-
-        for (auto& payload : payloads.GetArray()) {
-            Value return_value(kObjectType);
-
-            if (command == "insert") {
-                std::string key = payload["key"].GetString();
-                std::string value = payload["value"].GetString();
-
-                insert(key, value);
-
-                return_value.AddMember("status", 204, doc.GetAllocator());
-            }
-            else if (command == "get") {
-                std::string key = payload["key"].GetString();
-                std::string value = get(key);  // TODO: Return this
-
-                return_value.AddMember("status", 200, doc.GetAllocator());
-                return_value.AddMember("value", Value(value.c_str(), value.size()), doc.GetAllocator());
-            }
-            else if (command == "delete") {
-                std::string key = payload["key"].GetString();
-
-                if (erase(key)) {
                     return_value.AddMember("status", 204, doc.GetAllocator());
-                }
-                else{
-                    return_value.AddMember("status", 404, doc.GetAllocator());
-                }
-            }
-            else if (command == "find") {
-                std::string key = payload["key"].GetString();
+                } else if (command == "get") {
+                    std::string key(payload["key"].GetString());
+                    std::string value = get(key);
 
-                if (find(key)) {
+                    return_value.AddMember("status", 200, doc.GetAllocator());
+                    return_value.AddMember("value", Value(value.c_str(), value.size()), doc.GetAllocator());
+                } else if (command == "delete") {
+                    std::string key(payload["key"].GetString());
+
+                    if (erase(key)) {
+                        return_value.AddMember("status", 204, doc.GetAllocator());
+                    } else {
+                        return_value.AddMember("status", 404, doc.GetAllocator());
+                    }
+                } else if (command == "find") {
+                    std::string key(payload["key"].GetString());
+
+                    if (find(key)) {
+                        return_value.AddMember("status", 204, doc.GetAllocator());
+                    } else {
+                        return_value.AddMember("status", 404, doc.GetAllocator());
+                    }
+                } else if (command == "update") {
+                    std::string key(payload["key"].GetString());
+                    std::string value(payload["value"].GetString());
+
+                    if (update(key, value)) {
+                        return_value.AddMember("status", 204, doc.GetAllocator());
+                    } else {
+                        return_value.AddMember("status", 404, doc.GetAllocator());
+                    }
+                } else if (command == "upsert") {
+                    std::string key(payload["key"].GetString());
+                    std::string value(payload["value"].GetString());
+
+                    upsert(key, value);
+
                     return_value.AddMember("status", 204, doc.GetAllocator());
-                }
-                else {
-                    return_value.AddMember("status", 404, doc.GetAllocator());
-                }
-            }
-            else if (command == "update") {
-                std::string key = payload["key"].GetString();
-                std::string value = payload["value"].GetString();
+                } else if (command == "clear") {
+                    clear();
 
-                if (update(key, value)) {
                     return_value.AddMember("status", 204, doc.GetAllocator());
+                } else if (command == "count") {
+                    return_value.AddMember("status", 200, doc.GetAllocator());
+                    return_value.AddMember("value", size(), doc.GetAllocator());
                 }
-                else {
-                    return_value.AddMember("status", 404, doc.GetAllocator());
-                }
-            }
-            else if (command == "upsert") {
-                std::string key = payload["key"].GetString();
-                std::string value = payload["value"].GetString();
 
-                upsert(key, value);
-
-                return_value.AddMember("status", 204, doc.GetAllocator());
-            }
-            else if (command == "clear") {
-                clear();
-
-                return_value.AddMember("status", 204, doc.GetAllocator());
-            }
-            else if (command == "count") {
-                return_value.AddMember("status", 200, doc.GetAllocator());
-                return_value.AddMember("value", size(), doc.GetAllocator());
+                return_array.PushBack(return_value, doc.GetAllocator());
             }
 
-            return_array.PushBack(return_value, doc.GetAllocator());
+            response.AddMember("return", return_array, doc.GetAllocator());
         }
 
-        response.AddMember("return", return_array, doc.GetAllocator());
+        // Return response JSON
+        std::string res_str = getStringFromJSON(response);
+        send(consock, res_str.c_str(), strlen(res_str.c_str()), 0);
+
+        close(consock);
     }
     else {
         return -1;
