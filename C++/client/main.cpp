@@ -1,15 +1,19 @@
-#include <cstring>
-#include <iostream>
 #include <arpa/inet.h>
+#include <cstring>
+#include <fstream>
+#include <iostream>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <unistd.h>
 
 #define IP_ADDR "127.0.0.1"
 
 int main() {
-    char msg[100] = "What's good";
+    std::ifstream request_stream("./ddb_request", std::ifstream::in);
+    std::string request((std::istreambuf_iterator<char>(request_stream)), std::istreambuf_iterator<char>());
+
     struct sockaddr_in dst;
     int sock = socket(AF_INET, SOCK_STREAM, 0);
 
@@ -20,7 +24,13 @@ int main() {
 
     connect(sock, (struct sockaddr*)&dst, sizeof(struct sockaddr_in));
 
-    send(sock, msg, strlen(msg), 0);
+    char rsp[1000];
+
+    send(sock, request.c_str(), strlen(request.c_str()), 0);
+    recv(sock, rsp, 1000, 0);
+
+    std::cout << rsp << std::endl;
+    close(sock);
 
     return 0;
 }

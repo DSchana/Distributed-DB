@@ -1,0 +1,10 @@
+{
+    "id": "someid",
+    "command": "insert",
+    "payload": [
+        {
+            "key": "e",
+            "value": "Run you clever boy, and remember"
+        }
+    ]
+}
