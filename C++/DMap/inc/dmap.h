@@ -335,10 +335,14 @@ int dmap<K, V>::handleConnection() {
         Document doc;
         doc.Parse(buf);
 
+        Document::AllocatorType& allocator = doc.GetAllocator();
+
         if (doc.HasParseError() || !isJSONValid(doc)) {
-            response.AddMember("status", 400, doc.GetAllocator());
+            response.AddMember("status", 400, allocator);
         }
         else {
+            response.AddMember("id", Value(doc["id"].GetString(), allocator), allocator);
+
             Value return_array(kArrayType);
             std::string command = doc["command"].GetString();
 
@@ -352,37 +356,37 @@ int dmap<K, V>::handleConnection() {
                     insert(key, value);
                     std::cout << "Inserted " << key << ": " << get(key) << std::endl;
 
-                    return_value.AddMember("status", 204, doc.GetAllocator());
+                    return_value.AddMember("status", 204, allocator);
                 } else if (command == "get") {
                     std::string key(payload["key"].GetString());
                     std::string value = get(key);
 
-                    return_value.AddMember("status", 200, doc.GetAllocator());
-                    return_value.AddMember("value", Value(value.c_str(), value.size()), doc.GetAllocator());
+                    return_value.AddMember("status", 200, allocator);
+                    return_value.AddMember("value", Value(value.c_str(), value.size()), allocator);
                 } else if (command == "delete") {
                     std::string key(payload["key"].GetString());
 
                     if (erase(key)) {
-                        return_value.AddMember("status", 204, doc.GetAllocator());
+                        return_value.AddMember("status", 204, allocator);
                     } else {
-                        return_value.AddMember("status", 404, doc.GetAllocator());
+                        return_value.AddMember("status", 404, allocator);
                     }
                 } else if (command == "find") {
                     std::string key(payload["key"].GetString());
 
                     if (find(key)) {
-                        return_value.AddMember("status", 204, doc.GetAllocator());
+                        return_value.AddMember("status", 204, allocator);
                     } else {
-                        return_value.AddMember("status", 404, doc.GetAllocator());
+                        return_value.AddMember("status", 404, allocator);
                     }
                 } else if (command == "update") {
                     std::string key(payload["key"].GetString());
                     std::string value(payload["value"].GetString());
 
                     if (update(key, value)) {
-                        return_value.AddMember("status", 204, doc.GetAllocator());
+                        return_value.AddMember("status", 204, allocator);
                     } else {
-                        return_value.AddMember("status", 404, doc.GetAllocator());
+                        return_value.AddMember("status", 404, allocator);
                     }
                 } else if (command == "upsert") {
                     std::string key(payload["key"].GetString());
@@ -390,20 +394,20 @@ int dmap<K, V>::handleConnection() {
 
                     upsert(key, value);
 
-                    return_value.AddMember("status", 204, doc.GetAllocator());
+                    return_value.AddMember("status", 204, allocator);
                 } else if (command == "clear") {
                     clear();
 
-                    return_value.AddMember("status", 204, doc.GetAllocator());
+                    return_value.AddMember("status", 204, allocator);
                 } else if (command == "count") {
-                    return_value.AddMember("status", 200, doc.GetAllocator());
-                    return_value.AddMember("value", size(), doc.GetAllocator());
+                    return_value.AddMember("status", 200, allocator);
+                    return_value.AddMember("value", size(), allocator);
                 }
 
-                return_array.PushBack(return_value, doc.GetAllocator());
+                return_array.PushBack(return_value, allocator);
             }
 
-            response.AddMember("return", return_array, doc.GetAllocator());
+            response.AddMember("return", return_array, allocator);
         }
 
         // Return response JSON
