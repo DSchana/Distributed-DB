@@ -354,7 +354,6 @@ int dmap<K, V>::handleConnection() {
                     std::string value(payload["value"].GetString());
 
                     insert(key, value);
-                    std::cout << "Inserted " << key << ": " << get(key) << std::endl;
 
                     return_value.AddMember("status", 204, allocator);
                 } else if (command == "get") {
@@ -362,7 +361,7 @@ int dmap<K, V>::handleConnection() {
                     std::string value = get(key);
 
                     return_value.AddMember("status", 200, allocator);
-                    return_value.AddMember("value", Value(value.c_str(), value.size()), allocator);
+                    return_value.AddMember("value", Value(value.c_str(), allocator), allocator);
                 } else if (command == "delete") {
                     std::string key(payload["key"].GetString());
 
