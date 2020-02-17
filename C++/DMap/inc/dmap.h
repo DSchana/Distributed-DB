@@ -412,6 +412,7 @@ int dmap<K, V>::handleConnection() {
 
         // Return response JSON
         std::string res_str = getStringFromJSON(response);
+        std::cout << "Response: " << res_str << std::endl;
         send(consock, res_str.c_str(), strlen(res_str.c_str()), 0);
 
         close(consock);

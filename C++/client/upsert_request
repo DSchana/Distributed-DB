@@ -1,0 +1,14 @@
+{
+    "id": "upsert_id",
+    "command": "upsert",
+    "payload": [
+        {
+            "key": "e",
+            "value": "DOCTOR!"
+        },
+        {
+            "key": "Doctor",
+            "value": "Rule one of dying: don't!"
+        }
+    ]
+}

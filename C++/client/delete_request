@@ -1,0 +1,9 @@
+{
+    "id": "delete_id",
+    "command": "delete",
+    "payload": [
+        {
+            "key": "e",
+        }
+    ]
+}
