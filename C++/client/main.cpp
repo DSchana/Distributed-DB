@@ -10,7 +10,15 @@
 
 #define IP_ADDR "127.0.0.1"
 
-int sendCommand(int sock, struct sockaddr_in& dst, std::string file) {
+int sendCommand(std::string file) {
+    struct sockaddr_in dst;
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+
+    memset(&dst, 0, sizeof(dst));
+    dst.sin_family = AF_INET;
+    dst.sin_addr.s_addr = inet_addr(IP_ADDR);
+    dst.sin_port = htons(8061);
+
     connect(sock, (struct sockaddr*)&dst, sizeof(struct sockaddr_in));
 
     std::cout << "Command file: " << file << std::endl;
@@ -32,24 +40,16 @@ int sendCommand(int sock, struct sockaddr_in& dst, std::string file) {
 }
 
 int main() {
-    struct sockaddr_in dst;
-    int sock = socket(AF_INET, SOCK_STREAM, 0);
-
-    memset(&dst, 0, sizeof(dst));
-    dst.sin_family = AF_INET;
-    dst.sin_addr.s_addr = inet_addr(IP_ADDR);
-    dst.sin_port = htons(8061);
-
-    sendCommand(sock, dst, "./insert_request");
-    sendCommand(sock, dst, "./get_request");
-    sendCommand(sock, dst,  "./delete_request");
-    sendCommand(sock, dst, "./find_request");
-    sendCommand(sock, dst, "./update_request");
-    sendCommand(sock, dst, "./upsert_request");
-    sendCommand(sock, dst, "./get_request");
-    sendCommand(sock, dst, "./count_request");
-    sendCommand(sock, dst, "./clear_request");
-    sendCommand(sock, dst, "./count_request");
+    sendCommand("./insert_request");
+    sendCommand("./get_request");
+    sendCommand( "./delete_request");
+    sendCommand("./find_request");
+    sendCommand("./update_request");
+    sendCommand("./upsert_request");
+    sendCommand("./get_request");
+    sendCommand("./count_request");
+    sendCommand("./clear_request");
+    sendCommand("./count_request");
 
     return 0;
 }

@@ -3,7 +3,7 @@
     "command": "delete",
     "payload": [
         {
-            "key": "e",
+            "key": "e"
         }
     ]
 }

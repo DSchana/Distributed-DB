@@ -3,7 +3,7 @@
     "command": "find",
     "payload": [
         {
-            "key": "e",
+            "key": "e"
         }
     ]
 }
