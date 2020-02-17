@@ -10,10 +10,7 @@
 
 #define IP_ADDR "127.0.0.1"
 
-int main() {
-    std::ifstream request_stream("./ddb_request", std::ifstream::in);
-    std::string request((std::istreambuf_iterator<char>(request_stream)), std::istreambuf_iterator<char>());
-
+int sendCommand(std::string file) {
     struct sockaddr_in dst;
     int sock = socket(AF_INET, SOCK_STREAM, 0);
 
@@ -24,13 +21,35 @@ int main() {
 
     connect(sock, (struct sockaddr*)&dst, sizeof(struct sockaddr_in));
 
+    std::cout << "Command file: " << file << std::endl;
+
+    std::ifstream request_stream(file, std::ifstream::in);
+    std::string request((std::istreambuf_iterator<char>(request_stream)), std::istreambuf_iterator<char>());
+
     char rsp[1000];
+    usleep(500000);
 
     send(sock, request.c_str(), strlen(request.c_str()), 0);
     recv(sock, rsp, 1000, 0);
 
-    std::cout << rsp << std::endl;
+    std::cout << "Response: " << rsp << std::endl << std::endl;
+
     close(sock);
+
+    return 0;
+}
+
+int main() {
+    sendCommand("./insert_request");
+    sendCommand("./get_request");
+    sendCommand( "./delete_request");
+    sendCommand("./find_request");
+    sendCommand("./update_request");
+    sendCommand("./upsert_request");
+    sendCommand("./get_request");
+    sendCommand("./count_request");
+    sendCommand("./clear_request");
+    sendCommand("./count_request");
 
     return 0;
 }
