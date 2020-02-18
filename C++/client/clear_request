@@ -1,4 +1,5 @@
 {
     "id": "clear_id",
-    "command": "clear"
+    "command": "clear",
+    "payload": []
 }
