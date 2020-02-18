@@ -356,49 +356,59 @@ int dmap<K, V>::handleConnection() {
                     insert(key, value);
 
                     return_value.AddMember("status", 204, allocator);
-                } else if (command == "get") {
+                }
+                else if (command == "get") {
                     std::string key(payload["key"].GetString());
                     std::string value = get(key);
 
                     return_value.AddMember("status", 200, allocator);
                     return_value.AddMember("value", Value(value.c_str(), allocator), allocator);
-                } else if (command == "delete") {
+                }
+                else if (command == "delete") {
                     std::string key(payload["key"].GetString());
 
                     if (erase(key)) {
                         return_value.AddMember("status", 204, allocator);
-                    } else {
+                    }
+                    else {
                         return_value.AddMember("status", 404, allocator);
                     }
-                } else if (command == "find") {
+                }
+                else if (command == "find") {
                     std::string key(payload["key"].GetString());
 
                     if (find(key)) {
                         return_value.AddMember("status", 204, allocator);
-                    } else {
+                    }
+                    else {
                         return_value.AddMember("status", 404, allocator);
                     }
-                } else if (command == "update") {
+                }
+                else if (command == "update") {
                     std::string key(payload["key"].GetString());
                     std::string value(payload["value"].GetString());
 
                     if (update(key, value)) {
                         return_value.AddMember("status", 204, allocator);
-                    } else {
+                    }
+                    else {
                         return_value.AddMember("status", 404, allocator);
                     }
-                } else if (command == "upsert") {
+                }
+                else if (command == "upsert") {
                     std::string key(payload["key"].GetString());
                     std::string value(payload["value"].GetString());
 
                     upsert(key, value);
 
                     return_value.AddMember("status", 204, allocator);
-                } else if (command == "clear") {
+                }
+                else if (command == "clear") {
                     clear();
 
                     return_value.AddMember("status", 204, allocator);
-                } else if (command == "count") {
+                }
+                else if (command == "count") {
                     return_value.AddMember("status", 200, allocator);
                     return_value.AddMember("value", size(), allocator);
                 }
