@@ -13,122 +13,153 @@ class Client:
         messageJSON = json.dumps(message)
         sock.sendall(messageJSON.encode())
         result = sock.recv(1024).decode()
-        return result
+        return json.loads(result)
     
     def create(self):
         assert self.id == None
         message = { 
             "command": "create", 
-            "payload": {}
+            "payload": []
         }
-        self.id = self.sendrecv(message)
-        return self.id
+        response = self.sendrecv(message)
+        self.id = json.dumps(response)
+        return json.dumps(response)
 
     def insert(self, key, value):
         assert self.id != None
         message = { 
             "command": "insert", 
-            "payload": { 
-                "key": None,
-                "value": None
-            } 
+            "payload": []
         } 
 
-        message["payload"]["key"] = key
-        message["payload"]["value"] = value
+        payloadReqObj = {
+            "key": None,
+            "value": None
+        }
 
-        return self.sendrecv(message)
+        payloadReqObj["key"] = key
+        payloadReqObj["value"] = value
+        message["payload"].append(payloadReqObj)
+
+        response = self.sendrecv(message)
+
+        return json.dumps(response)
 
     def get(self, key):
         assert self.id != None
         message = {
             "command": "get",
-            "payload": {
-                "key": None,
-                "value": None
-            }
+            "payload": []
         }
 
-        message["payload"]["key"] = key
-        return self.sendrecv(message)
+        payloadReqObj = {
+            "key": None
+        }
+
+        payloadReqObj["key"] = key
+        message["payload"].append(payloadReqObj)
+
+        response = self.sendrecv(message)
+        returnObj = response["return"]
+        return returnObj[0]["value"]
 
     def delete(self, key):
         assert self.id != None
         message = {
-            "command": "delete",
-            "payload": {
-                "key": None,
-                "value": None
-            }
+            "command": "get",
+            "payload": []
         }
 
-        message["payload"]["key"] = key
-        return self.sendrecv(message)
+        payloadReqObj = {
+            "key": None
+        }
+
+        payloadReqObj["key"] = key
+        message["payload"].append(payloadReqObj)
+
+        response = self.sendrecv(message)
+
+        return json.dumps(response)
         
 
     def find(self, key):
         assert self.id != None
         message = {
-            "command": "find",
-            "payload": {
-                "key": None,
-                "value": None
-            }
+            "command": "get",
+            "payload": []
         }
 
-        message["payload"]["key"] = key
-        return self.sendrecv(message)
+        payloadReqObj = {
+            "key": None
+        }
+
+        payloadReqObj["key"] = key
+        message["payload"].append(payloadReqObj)
+
+        response = self.sendrecv(message)
+        returnObj = response["return"]
+        return returnObj[0]["value"]
 
     def update(self, key, value):
         assert self.id != None
-        message = {
-            "command": "update",
-            "payload": {
-                "key": None,
-                "value": None
-            }
+        message = { 
+            "command": "insert", 
+            "payload": []
+        } 
+
+        payloadReqObj = {
+            "key": None,
+            "value": None
         }
 
-        message["payload"]["key"] = key
-        return self.sendrecv(message)
+        payloadReqObj["key"] = key
+        payloadReqObj["value"] = value
+        message["payload"].append(payloadReqObj)
+
+        response = self.sendrecv(message)
+    
+        return json.dumps(response)
 
     def upsert(self, key, value):
         assert self.id != None
-        message = {
-            "command": "upsert",
-            "payload": {
-                "key": None,
-                "value": None
-            }
+        message = { 
+            "command": "insert", 
+            "payload": []
+        } 
+
+        payloadReqObj = {
+            "key": None,
+            "value": None
         }
 
-        message["payload"]["key"] = key
-        message["payload"]["value"] = value
+        payloadReqObj["key"] = key
+        payloadReqObj["value"] = value
+        message["payload"].append(payloadReqObj)
 
-        return self.sendrecv(message)
+        response = self.sendrecv(message)
+
+        return json.dumps(response)
 
     def clear(self):
         assert self.id != None
         message = {
             "command": "clear",
-            "payload": {
-                "key": None,
-                "value": None
-            }
+            "payload": [{}]
         }
 
-        return self.sendrecv(message)
+        response = self.sendrecv(message)
+
+        return json.dumps(response)
 
     def count(self):
         assert self.id != None
         message = {
             "command": "count",
-            "payload": {
-                "key": None,
-                "value": None
-            }
+            "payload": [{}]
         }
 
-        return self.sendrecv(message)
+        response = self.sendrecv(message)
+
+        return json.dumps(response)
 
 

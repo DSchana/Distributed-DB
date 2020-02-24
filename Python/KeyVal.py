@@ -29,7 +29,7 @@ class KeyVal:
             return 'Key does not exist'
             
     def find(self, k):
-        return k in self.dic
+        return k in self.dic.keys()
 
     def update(self, k, v):
         if k in self.dic:

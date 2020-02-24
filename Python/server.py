@@ -16,6 +16,143 @@ class Server:
         self.lock = threading.Lock()
         self.IDs = 1
 
+    def sendResponse(self, conn, response):
+        # response = { 
+        #     "response": None 
+        # }
+        # response["response"] = result
+        responseJSON = json.dumps(response)
+        conn.sendall(responseJSON.encode())
+        return
+
+    def execRequest(self, command, requestObj):
+        command = command.lower()
+
+        if command == "create":
+            print("Create command received")
+            self.lock.acquire()
+            result = self.keyval.create()
+            self.lock.release()
+
+            return { "status": 204 }
+
+        elif command == "insert":
+            print("Insert command received")
+            if "key" not in requestObj or \
+                "value" not in requestObj:
+                print("Insert request with invalid payload format")
+                return { "status": 400 }
+                
+            key = requestObj["key"]
+            value = requestObj["value"]
+
+            self.lock.acquire()
+            result = self.keyval.insert(key, value)
+            self.lock.release()
+            
+            return { "status": 200 }
+
+        elif command == "get":
+            print("Get command received")
+            if "key" not in requestObj:
+                print("Get request with invalid payload format")
+                return { "status": 400 }
+
+            key = requestObj["key"]
+
+            self.lock.acquire()
+            result = self.keyval.get(key)
+            self.lock.release()
+
+            if result == 'Key does not exist':
+                return { "status": 404 }
+            else:
+                return { "status": 200, "value": result }
+
+        elif command == "delete":
+            print("Delete command received")
+            if "key" not in requestObj:
+                print("Delete request with invalid payload format")
+                return { "status": 400 }
+
+            key = requestObj["key"]
+
+            self.lock.acquire()
+            result = self.keyval.delete(key)
+            self.lock.release()
+
+            if result == 'Key does not exist':
+                return { "status": 404 }
+            else: 
+                return { "status": 204 }
+
+        elif command == "find":
+            print("Find command received")
+            if "key" not in requestObj:
+                print("Find request with invalid payload format")
+                return { "status": 400 }
+
+            key = requestObj["key"]
+
+            self.lock.acquire()
+            result = self.keyval.find(key)
+            self.lock.release()
+
+            return { "status": 200, "value": result }
+
+        elif command == "update":
+            print("Update command received")
+            if "key" not in requestObj or \
+                "value" not in requestObj:
+                print("Update request with invalid payload format")
+                return { "status": 400 }
+
+            key = requestObj["key"]
+            value = requestObj["value"]
+
+            self.lock.acquire()
+            result = self.keyval.update(key, value)
+            self.lock.release()
+
+            if result == 'Key does not exist':
+                return { "status": 404 }
+            else:
+                return { "status": 204 }
+
+        elif command == "upsert":
+            print("Upsert command received")
+            if "key" not in requestObj or \
+                "value" not in requestObj:
+                print("Find request with invalid payload format")
+                return { "status": 400 }
+
+            key = requestObj["key"]
+            value = requestObj["value"]
+
+            self.lock.acquire()
+            result = self.keyval.upSert(key, value)
+            self.lock.release()
+
+            return { "status": 204 }
+
+        elif command == "clear":
+            print("Clear command received")
+            self.lock.acquire()
+            result = self.keyval.clear()
+            self.lock.release()
+            
+            return { "status": 204 } 
+
+        elif command == "count":
+            print("Count command received")
+            self.lock.acquire()
+            result = self.keyval.count()
+            self.lock.release()
+
+            return { "status": 200, "value": result }
+
+
+
     def handler(self, conn, addr):
         while True:
             try:
@@ -23,104 +160,27 @@ class Server:
                 request = json.loads(data)
                 print(request)
 
-                if "command" not in request:
-                    print("Received request without valid format")
-                    break
+                # if (len(request) != 3 or \
+                #     "command" not in request or \
+                #     "payload" not in request):
+                #     print("Received request without valid format")
+                #     continue
                 
-                command = request["command"].lower()
+                payload = request["payload"]
+                command = request["command"]
 
-                if command == "create":
-                    print("Create command received")
-                    self.lock.acquire()
-                    result = self.keyval.Create()
-                    self.lock.release()
-                    self.sendResponse(conn, result)
+                # Build response object
+                responseJSON = {
+                    "id": None,
+                    "return": []
+                }
 
-                elif command == "insert":
-                    print("Insert command received")
-                    if "payload" not in request:
-                        print("Insert request without valid payload format")
-                        break
-                    payload = request["payload"]
-                    key = payload["key"]
-                    value = payload["value"]
-
-                    self.lock.acquire()
-                    result = self.keyval.Insert(key, value)
-                    self.lock.release()
-                    self.sendResponse(conn, result)
-
-                elif command == "get":
-                    print("Get command received")
-                    payload = request["payload"]
-                    key = payload["key"]
-
-                    self.lock.acquire()
-                    result = self.keyval.Get(key)
-                    self.lock.release()
-                    self.sendResponse(conn, result)
-
-                elif command == "delete":
-                    print("Delete command received")
-                    payload = request["payload"]
-                    key = payload["key"]
-
-                    self.lock.acquire()
-                    result = self.keyval.Delete(key)
-                    self.lock.release()
-                    self.sendResponse(conn, result)
-
-                elif command == "find":
-                    print("Find command received")
-                    payload = request["payload"]
-                    key = payload["key"]
-
-                    self.lock.acquire()
-                    result = self.keyval.Find(key)
-                    self.lock.release()
-                    self.sendResponse(conn, result)
-
-                elif command == "update":
-                    print("Update command received")
-                    if "payload" not in request:
-                        print("Insert request without valid payload format")
-                        break
-                    payload = request["payload"]
-                    key = payload["key"]
-                    value = payload["value"]
-
-                    self.lock.acquire()
-                    result = self.keyval.Update(key, value)
-                    self.lock.release()
-                    self.sendResponse(conn, result)
-
-                elif command == "upsert":
-                    print("Upsert command received")
-                    if "payload" not in request:
-                        print("Insert request without valid payload format")
-                        break
-                    payload = request["payload"]
-                    key = payload["key"]
-                    value = payload["value"]
-
-                    self.lock.acquire()
-                    result = self.keyval.UpSert(key, value)
-                    self.lock.release()
-                    self.sendResponse(conn, result)
-
-                elif command == "clear":
-                    print("Clear command received")
-                    self.lock.acquire()
-                    result = self.keyval.Clear()
-                    self.lock.release()
-                    self.sendResponse(conn, result)
-                    
-                elif command == "count":
-                    print("Count command received")
-                    self.lock.acquire()
-                    result = self.keyval.Count()
-                    self.lock.release()
-                    self.sendResponse(conn, result)
+                # For each request object, exec command and add to response object
+                for req in payload:
+                    result = self.execRequest(command, req)
+                    responseJSON["return"].append(result)
+                
+                self.sendResponse(conn, responseJSON)
 
             except Exception as e:
                 # print(e)
@@ -128,15 +188,6 @@ class Server:
                 # print(str(addr[0])+':'+str(addr[1])+" Disconnected")
                 # print("Failed at server handler")
                 break
-
-    def sendResponse(self, conn, result):
-        response = { 
-            "response": None 
-        }
-        response["response"] = result
-        responseJSON = json.dumps(response)
-        conn.sendall(responseJSON.encode())
-        return
 
     def run(self):
         while True:
