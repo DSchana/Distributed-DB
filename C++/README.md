@@ -1,10 +1,11 @@
 # C++ Implementation
 
 ## Requirements
- * CMake >= 3.0
- * C++2a
+ * cmake >= 3.0
+ * c++2a
     * GCC >= 9.0
     * Clang >= 9.0
+ * pkg-config >= 1.6.3
 
 ## build
 Run `git submodule init` and `git submodule update` to make avaliable the RapidJson library for building.
