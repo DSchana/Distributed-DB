@@ -38,6 +38,7 @@ class dmap {
     socklen_t sock_size = sizeof(struct sockaddr_in);
 
     int handleConnection();
+    int createConnection();
 
 public:
     dmap(std::string config_path = "./ddb.config");
@@ -55,8 +56,9 @@ public:
     V& operator[](K key);
 
     // Networking
-    int start( );
+    int start();
     int stop();
+    void sendTest();
 };
 
 template <class K, class V>
@@ -301,6 +303,43 @@ std::string getStringFromJSON(rapidjson::Value const& doc) {
     return std::string(strdup(buffer.GetString()));
 }
 
+template <class K, class V>
+void dmap<K, V>::sendTest() {
+    createConnection();
+}
+
+/**
+ * Instance of server infrastruction looking to connect to
+ * a server instance and send information
+ *
+ * @return  0   if request successfully executed
+ *          <0  otherwise
+ */
+template <class K, class V>
+int dmap<K, V>::createConnection() {
+    struct sockaddr_in dst;
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+
+    memset(&dst, 0, sizeof(dst));
+    dst.sin_family = AF_INET;
+    dst.sin_addr.s_addr = inet_addr("127.0.0.1");
+    dst.sin_port = htons(8061);
+
+    connect(sock, (struct sockaddr*)&dst, sizeof(struct sockaddr_in));
+
+    char msg[1000] = "{\"id\": \"count_id\", \"command\": \"count\", \"payload\": []}";  // TODO: Get the message to send from somewhere
+    char rsp[1000];
+
+    send(sock, msg, strlen(msg), 0);
+    recv(sock, rsp, 1000, 0);
+
+    std::cout << "Response: " << rsp << std::endl;
+
+    close(sock);
+
+    return 0;
+}
+
 /**
  * Instance of server infrastructure waiting for a command
  * to come from a client. Checks if the message fits the
@@ -308,7 +347,7 @@ std::string getStringFromJSON(rapidjson::Value const& doc) {
  * executes the request if it does.
  *
  * @return  0   if request successfully executied
- *          <0 otherwise
+ *          <0  otherwise
  */
 template <class K, class V>
 int dmap<K, V>::handleConnection() {
@@ -421,7 +460,6 @@ int dmap<K, V>::handleConnection() {
 
         // Return response JSON
         std::string res_str = getStringFromJSON(response);
-        std::cout << "Response: " << res_str << std::endl;
         send(consock, res_str.c_str(), strlen(res_str.c_str()), 0);
 
         close(consock);
