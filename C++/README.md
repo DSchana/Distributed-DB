@@ -6,6 +6,8 @@
     * GCC >= 9.0
     * Clang >= 9.0
  * pkg-config >= 1.6.3
+ * Google Test
+    * libgtest-dev (for debian based kernel)
 
 ## build
 Run `git submodule init` and `git submodule update` to make avaliable the RapidJson library for building.
