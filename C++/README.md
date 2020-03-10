@@ -10,15 +10,6 @@
     * libgtest-dev (for debian based kernel)
 
 ## build
-Run `git submodule init` and `git submodule update` to make avaliable the RapidJson library for building.
+Run `configure.sh` to fetch git submodules and configure cmake config files. It may not complete the make all the way, that's fine, thie is just needed to generate `RapidJSONConfig.cmake`.
 
-Use `cmake` to generate make files from C++/CMakeLists.txt. Use `make all` from the same directory as the `cmake` call to generate `DistributedDB` executable file.
-
-ex. \
-From Distributed-DB/C++
-```
-mkdir build
-cd build
-cmake ..
-make all
-```
+Run `build.sh` to compile DDB into executable.
