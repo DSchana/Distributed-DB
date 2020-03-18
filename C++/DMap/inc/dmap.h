@@ -14,6 +14,7 @@
 #include <rapidjson/document.h>
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/writer.h>
+#include <stdexcept>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -37,11 +38,13 @@ class dmap {
     struct sockaddr_in serv;
     socklen_t sock_size = sizeof(struct sockaddr_in);
 
+    unsigned int port;
+
     int handleConnection();
-    int createConnection();
+    std::string createConnection(std::string msg, std::string dst_ip);
 
 public:
-    dmap(std::string config_path = "./ddb.config");
+    dmap(std::string config_path = "./.config/ddb.config");
     ~dmap();
     void insert(K key, V value);
     V& get(K key);
@@ -58,7 +61,6 @@ public:
     // Networking
     int start();
     int stop();
-    void sendTest();
 };
 
 template <class K, class V>
@@ -68,19 +70,20 @@ dmap<K, V>::dmap(std::string config_path) {
     running = true;
 
     std::ifstream s_config(config_path, std::ifstream::in);
-    std::string ddb_config((std::istreambuf_iterator<char>(s_config)), std::istreambuf_iterator<char>());
+    if (!s_config) {
+        throw std::runtime_error("Missing config file: " + config_path);
+    }
 
-    unsigned int port = 0;
+    std::string ddb_config((std::istreambuf_iterator<char>(s_config)), std::istreambuf_iterator<char>());
 
     Document config_json;
     config_json.Parse(ddb_config.c_str());
 
-    if (config_json.HasMember("port") && config_json["port"].IsUint()) {
-        port = config_json["port"].GetUint();
+    if (!config_json.HasMember("port") || !config_json["port"].IsUint()) {
+        throw std::runtime_error("Invlaid port format in config file");
     }
-    else {
-        // TODO: Throw error
-    }
+
+    port = config_json["port"].GetUint();
 
     memset(&serv, 0, sizeof(serv));
     serv.sin_family = AF_INET;
@@ -88,6 +91,18 @@ dmap<K, V>::dmap(std::string config_path) {
     serv.sin_port = htons(port);
 
     sock = socket(AF_INET, SOCK_STREAM, 0);
+
+    // Network discovery
+    std::fstream net_list("./.config/network-discovery", std::fstream::out | std::fstream::in);
+    if (!net_list) {
+        throw std::runtime_error("Missing network discovery file: ./.config/network-discovery");
+    }
+
+    std::string ip;
+    while (net_list >> ip) {
+        std::cout << ip << std::endl;
+        // TODO: Ping old network nodes
+    }
 
     nm_future = std::async(std::launch::async, &dmap<K, V>::start, this);
 }
@@ -303,43 +318,35 @@ std::string getStringFromJSON(rapidjson::Value const& doc) {
     return std::string(strdup(buffer.GetString()));
 }
 
-template <class K, class V>
-void dmap<K, V>::sendTest() {
-    createConnection();
-}
-
 /**
  * Instance of server infrastruction looking to connect to
  * a server instance and send information
  *
- * @return  0   if request successfully executed
- *          <0  otherwise
+ * @return  Response of the request
  */
 template <class K, class V>
-int dmap<K, V>::createConnection() {
+std::string dmap<K, V>::createConnection(std::string msg, std::string dst_ip) {
     struct sockaddr_in dst;
     int sock = socket(AF_INET, SOCK_STREAM, 0);
 
     memset(&dst, 0, sizeof(dst));
     dst.sin_family = AF_INET;
-    dst.sin_addr.s_addr = inet_addr("127.0.0.1");
-    dst.sin_port = htons(8061);
+    dst.sin_addr.s_addr = inet_addr(dst_ip.c_str());
+    dst.sin_port = htons(port);
 
     connect(sock, (struct sockaddr*)&dst, sizeof(struct sockaddr_in));
 
-    char msg[1000] = "{\"id\": \"count_id\", \"command\": \"count\", \"payload\": []}";  // TODO: Get the message to send from somewhere
     char rsp[1000];
 
-    send(sock, msg, strlen(msg), 0);
+    send(sock, msg.c_str(), strlen(msg.c_str()), 0);
     recv(sock, rsp, 1000, 0);
-
-    std::cout << "Response: " << rsp << std::endl;
 
     close(sock);
 
-    return 0;
+    return rsp;
 }
 
+// TODO: Handle discovery protocol connections
 /**
  * Instance of server infrastructure waiting for a command
  * to come from a client. Checks if the message fits the
