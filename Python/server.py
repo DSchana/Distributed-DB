@@ -12,7 +12,7 @@ class Server:
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.bind((self.host, self.port))
         self.sock.listen(1)
-        self.keyval = KeyVal()
+        self.keyvals = {}
         self.lock = threading.Lock()
         self.IDs = 1
 
@@ -25,13 +25,14 @@ class Server:
         conn.sendall(responseJSON.encode())
         return
 
-    def execRequest(self, command, requestObj):
+    def execRequest(self, clientID, command, requestObj):
         command = command.lower()
 
         if command == "create":
             print("Create command received")
             self.lock.acquire()
-            result = self.keyval.create()
+            self.keyvals[clientID] = KeyVal()
+            result = self.keyvals.get(clientID).create()
             self.lock.release()
 
             return { "status": 204 }
@@ -47,7 +48,7 @@ class Server:
             value = requestObj["value"]
 
             self.lock.acquire()
-            result = self.keyval.insert(key, value)
+            result = self.keyvals[clientID].insert(key, value)
             self.lock.release()
             
             return { "status": 200 }
@@ -61,7 +62,7 @@ class Server:
             key = requestObj["key"]
 
             self.lock.acquire()
-            result = self.keyval.get(key)
+            result = self.keyvals[clientID].get(key)
             self.lock.release()
 
             if result == 'Key does not exist':
@@ -78,7 +79,7 @@ class Server:
             key = requestObj["key"]
 
             self.lock.acquire()
-            result = self.keyval.delete(key)
+            result = self.keyvals[clientID].delete(key)
             self.lock.release()
 
             if result == 'Key does not exist':
@@ -95,7 +96,7 @@ class Server:
             key = requestObj["key"]
 
             self.lock.acquire()
-            result = self.keyval.find(key)
+            result = self.keyvals[clientID].find(key)
             self.lock.release()
 
             return { "status": 200, "value": result }
@@ -111,7 +112,7 @@ class Server:
             value = requestObj["value"]
 
             self.lock.acquire()
-            result = self.keyval.update(key, value)
+            result = self.keyvals[clientID].update(key, value)
             self.lock.release()
 
             if result == 'Key does not exist':
@@ -130,7 +131,7 @@ class Server:
             value = requestObj["value"]
 
             self.lock.acquire()
-            result = self.keyval.upSert(key, value)
+            result = self.keyvals[clientID].upSert(key, value)
             self.lock.release()
 
             return { "status": 204 }
@@ -138,7 +139,7 @@ class Server:
         elif command == "clear":
             print("Clear command received")
             self.lock.acquire()
-            result = self.keyval.clear()
+            result = self.keyvals[clientID].clear()
             self.lock.release()
             
             return { "status": 204 } 
@@ -146,7 +147,7 @@ class Server:
         elif command == "count":
             print("Count command received")
             self.lock.acquire()
-            result = self.keyval.count()
+            result = self.keyvals[clientID].count()
             self.lock.release()
 
             return { "status": 200, "value": result }
@@ -156,33 +157,36 @@ class Server:
     def handler(self, conn, addr):
         while True:
             try:
-                data = conn.recv(1024)
+                data = conn.recv(1024).decode('utf-8')
                 request = json.loads(data)
                 print(request)
 
-                # if (len(request) != 3 or \
-                #     "command" not in request or \
-                #     "payload" not in request):
-                #     print("Received request without valid format")
-                #     continue
+                if (len(request) != 3 or \
+                    "id" not in request or \
+                    "command" not in request or \
+                    "payload" not in request):
+                    print("Received request without valid format")
+                    continue
                 
-                payload = request["payload"]
+                clientID = request["id"]
                 command = request["command"]
+                payload = request["payload"]
 
                 # Build response object
                 responseJSON = {
-                    "id": None,
+                    "id": clientID,
                     "return": []
                 }
 
                 # For each request object, exec command and add to response object
                 for req in payload:
-                    result = self.execRequest(command, req)
+                    result = self.execRequest(clientID, command, req)
                     responseJSON["return"].append(result)
                 
                 self.sendResponse(conn, responseJSON)
 
             except Exception as e:
+                # print(type(e))
                 # print(e)
                 # conn.close()
                 # print(str(addr[0])+':'+str(addr[1])+" Disconnected")

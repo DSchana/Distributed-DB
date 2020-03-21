@@ -1,5 +1,7 @@
 import socket
 import json
+import string
+import random
 
 class Client:
     def __init__(self, host, port):
@@ -15,19 +17,27 @@ class Client:
         result = sock.recv(1024).decode()
         return json.loads(result)
     
+    def idGenerator(self, size = 20):
+        chars = string.ascii_letters + string.digits
+        return ''.join(random.choice(chars) for _ in range(size))
+
     def create(self):
         assert self.id == None
+        self.id = self.idGenerator()
+
         message = { 
+            "id": self.id,
             "command": "create", 
-            "payload": []
+            "payload": [{}]
         }
+
         response = self.sendrecv(message)
-        self.id = json.dumps(response)
-        return json.dumps(response)
+        return response
 
     def insert(self, key, value):
         assert self.id != None
         message = { 
+            "id": self.id,
             "command": "insert", 
             "payload": []
         } 
@@ -43,11 +53,12 @@ class Client:
 
         response = self.sendrecv(message)
 
-        return json.dumps(response)
+        return response
 
     def get(self, key):
         assert self.id != None
         message = {
+            "id": self.id,
             "command": "get",
             "payload": []
         }
@@ -66,6 +77,7 @@ class Client:
     def delete(self, key):
         assert self.id != None
         message = {
+            "id": self.id,
             "command": "get",
             "payload": []
         }
@@ -85,6 +97,7 @@ class Client:
     def find(self, key):
         assert self.id != None
         message = {
+            "id": self.id,
             "command": "get",
             "payload": []
         }
@@ -103,6 +116,7 @@ class Client:
     def update(self, key, value):
         assert self.id != None
         message = { 
+            "id": self.id,
             "command": "insert", 
             "payload": []
         } 
@@ -123,6 +137,7 @@ class Client:
     def upsert(self, key, value):
         assert self.id != None
         message = { 
+            "id": self.id,
             "command": "insert", 
             "payload": []
         } 
@@ -143,6 +158,7 @@ class Client:
     def clear(self):
         assert self.id != None
         message = {
+            "id": self.id,
             "command": "clear",
             "payload": [{}]
         }
@@ -154,6 +170,7 @@ class Client:
     def count(self):
         assert self.id != None
         message = {
+            "id": self.id,
             "command": "count",
             "payload": [{}]
         }
