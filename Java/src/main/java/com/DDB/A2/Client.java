@@ -57,7 +57,7 @@ public class Client {
             //Link to server
             PrintStream p = new PrintStream(serverSocket.getOutputStream());
             Scanner serverScanner = new Scanner(serverSocket.getInputStream());
-            while (serverScanner.hasNextLine()) {
+            while (serverScanner.hasNextLine() && !sc.isClosed()) {
                 // unfortunately Java's scanner is horrible with detecting input when used over a socket
                 if (command < 9)
                     while (!(serverResponse = serverScanner.nextLine()).trim().equals("END"))
@@ -84,11 +84,14 @@ public class Client {
                     output = "";
                 }
             }
-            sc.close();
             System.out.println("Successfully exited client");
         } catch (IOException e) {
             System.out.println("Socket could not be created, check processes permissions");
             e.printStackTrace();
+            sc.close();
+        } finally{
+            if(!sc.isClosed())
+                sc.close();
         }
     }
 
