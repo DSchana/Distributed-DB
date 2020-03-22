@@ -4,6 +4,14 @@
 int main() {
     dmap<std::string, std::string> map;
 
+    while (true) {}
+
+    /*
+    usleep(1000000);
+    std::cout << "Sending test" << std::endl;
+    map.sendTest();
+    */
+
     /*
     map[4] = 1;
     map[3] = 2;
