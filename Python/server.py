@@ -3,18 +3,64 @@ import socket
 import threading
 from KeyVal import *
 import sys
+import string
 import json
+import random
+import select
 
 class Server:
     def __init__(self, host, port):
         self.host = host
         self.port = port
+        self.keyvals = {}
+        self.lock = threading.Lock()
+        self.IDs = []
+        self.isCentralNode = False
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.bind((self.host, self.port))
         self.sock.listen(1)
-        self.keyvals = {}
-        self.lock = threading.Lock()
-        self.IDs = 1
+        self.selfID = None
+        self.selectInput = [self.sock]
+        self.selectOutput = []
+
+        # Attempt to contact existing central node
+        self.nodeCreateSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.nodeCreateSock.settimeout(0.1)
+        try:
+            self.nodeCreateSock.connect((self.host, 8002))
+            print("Im a non-central node")
+        except socket.timeout:
+            print("Im the central node")
+            self.isCentralNode = True
+            self.selfID = 1
+            self.nonCentralNodes = []
+
+            self.nodeCreateSock.close()
+            self.nodeCreateSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.nodeCreateSock.bind((self.host, 8002))
+            self.nodeCreateSock.listen(1)
+            self.selectInput.append(self.nodeCreateSock)
+
+        # message = { 
+        #     "command": "contact central node"
+        # }
+        # messageJSON = json.dumps(message)
+        # self.nodeCreateSock.sendall(messageJSON.encode())
+        # try:
+        #     response = json.loads(self.nodeCreateSock.recv(1024).decode())
+        #     print(response)
+        #     print("Im a non-central node")
+
+        # except socket.timeout:
+        #     print("Im the central node")
+        #     self.isCentralNode = True
+        #     self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        #     self.sock.bind((self.host, self.port))
+        #     self.sock.listen(1)
+        
+    def idGenerator(self, size = 20):
+        chars = string.ascii_letters + string.digits
+        return ''.join(random.choice(chars) for _ in range(size))
 
     def sendResponse(self, conn, response):
         # response = { 
@@ -157,33 +203,114 @@ class Server:
     def handler(self, conn, addr):
         while True:
             try:
-                data = conn.recv(1024).decode('utf-8')
-                request = json.loads(data)
-                print(request)
+                readable, writable, exceptional = select.select(self.selectInput, self.selectOutput, self.selectInput)
 
-                if (len(request) != 3 or \
-                    "id" not in request or \
-                    "command" not in request or \
-                    "payload" not in request):
-                    print("Received request without valid format")
-                    continue
+                for s in readable:
+                    if s is server:
+                        conn, addr = s.accept()
+                        conn.setblocking(0)
+                        self.selectInput.append(conn)
+                    else:
+                        data = s.recv(1024).decode('utf-8')
+                        if data:
+                            request = json.loads(data)
+
+                            if (self.isCentralNode):
+                                if ("command" in request and \
+                                    request["command"] == "contact central node"):
+
+                                    newNodeID = self.idGenerator()
+                                    responseJSON = {
+                                        "id": newNodeID,
+                                        "command": "contact acknowledge"
+                                    }
+                                    self.nonCentralNodes.append(newNodeID)
+
+                            else:
+                                # Handle for case self is a non-central node
+                                if ("command" in request and \
+                                    request["command"] == "contact acknowledge"):
+                                    self.selfID = request["id"]
+
+                                if (len(request) != 3 or \
+                                    "id" not in request or \
+                                    "command" not in request or \
+                                    "payload" not in request):
+                                    print("Received request without valid format")
+                                    continue
+                                
+                                clientID = request["id"]
+                                command = request["command"]
+                                payload = request["payload"]
+
+                                # Build response object
+                                responseJSON = {
+                                    "id": clientID,
+                                    "return": []
+                                }
+
+                                # For each request object, exec command and add to response object
+                                for req in payload:
+                                    result = self.execRequest(clientID, command, req)
+                                    responseJSON["return"].append(result)
+                                
+                                self.sendResponse(conn, responseJSON)
+                        else:
+                            if s in self.selectOutput:
+                                self.selectOutput.remove(s)
+                            self.selectInput.remove(s)
+                            s.close()
+
+                for s in exceptional:
+                    self.selectInput.remove(s)
+                    if s in self.selectOutput:
+                        self.selectOutput.remove(s)
+                    s.close()
+
+                # data = conn.recv(1024).decode('utf-8')
+                # request = json.loads(data)
+                # print(request)
+
+                # # Handle for if self is the central node
+                # if (self.isCentralNode and \
+                #     "command" in request and \
+                #     request["command"] == "contact central node"):
+
+                #     newNodeID = self.idGenerator()
+                #     responseJSON = {
+                #         "id": newNodeID,
+                #         "command": "contact acknowledge"
+                #     }
+                #     self.nonCentralNodes.append(newNodeID)
+
+
+                #     continue
+
+
+                # # Handle for case self is a non-central node
+                # if (len(request) != 3 or \
+                #     "id" not in request or \
+                #     "command" not in request or \
+                #     "payload" not in request):
+                #     print("Received request without valid format")
+                #     continue
                 
-                clientID = request["id"]
-                command = request["command"]
-                payload = request["payload"]
+                # clientID = request["id"]
+                # command = request["command"]
+                # payload = request["payload"]
 
-                # Build response object
-                responseJSON = {
-                    "id": clientID,
-                    "return": []
-                }
+                # # Build response object
+                # responseJSON = {
+                #     "id": clientID,
+                #     "return": []
+                # }
 
-                # For each request object, exec command and add to response object
-                for req in payload:
-                    result = self.execRequest(clientID, command, req)
-                    responseJSON["return"].append(result)
+                # # For each request object, exec command and add to response object
+                # for req in payload:
+                #     result = self.execRequest(clientID, command, req)
+                #     responseJSON["return"].append(result)
                 
-                self.sendResponse(conn, responseJSON)
+                # self.sendResponse(conn, responseJSON)
 
             except Exception as e:
                 # print(type(e))
