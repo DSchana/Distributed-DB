@@ -1,4 +1,4 @@
-/* Abdullah Arif
+package src.main.java.com.DDB.A2;/* Abdullah Arif
 * COMP-4680
 * Client class that will connect to the server 
 * implements all the basic key store operations */
@@ -29,7 +29,7 @@ public class Client {
         int socketNumber = 2000;
         try {
             // Open configuration file
-            BufferedReader br = new BufferedReader(new FileReader("Client.config"));
+            BufferedReader br = new BufferedReader(new FileReader("src/main/java/com/DDB/A2/Client.config"));
             serverIP = br.readLine().trim();
             socketNumber = Integer.parseInt(br.readLine().trim());
         } catch (IOException e) {
@@ -57,7 +57,7 @@ public class Client {
             //Link to server
             PrintStream p = new PrintStream(serverSocket.getOutputStream());
             Scanner serverScanner = new Scanner(serverSocket.getInputStream());
-            while (serverScanner.hasNextLine() && !sc.isClosed()) {
+            while (serverScanner.hasNextLine() ) {
                 // unfortunately Java's scanner is horrible with detecting input when used over a socket
                 if (command < 9)
                     while (!(serverResponse = serverScanner.nextLine()).trim().equals("END"))
@@ -89,11 +89,13 @@ public class Client {
             System.out.println("Socket could not be created, check processes permissions");
             e.printStackTrace();
             sc.close();
-        } finally{
-            if(!sc.isClosed())
-                sc.close();
         }
+//        finally{
+//            if(!sc.isClosed())
+//                sc.close();
+//        }
     }
+
 
     /* prompt for the client */
     private static void userPrompt() {

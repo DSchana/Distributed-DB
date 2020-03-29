@@ -1,5 +1,5 @@
-// Handles calls regarding manipulation of the Key-Value store in the 
-package src.main.java.com.DDB.A3;
+// Handles calls regarding manipulation of the Key-Value both locally and remotely
+package main.java.com.DDB.A3;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
@@ -25,26 +25,26 @@ public class KVSNetworkAPI {
     private static AtomicBoolean metaLock; // controls Access to key-value store
     private static KVSNetworkAPI singleton = null;
     private int socketNumber = 2000, maxClients = 25;
-    private KVSNetworkAPI(){
-        try {
-            // Open configuration file
-            BufferedReader br = new BufferedReader(new FileReader("Server.config"));
-            socketNumber = Integer.parseInt(br.readLine().trim());
-            maxClients = Integer.parseInt(br.readLine().trim());
-            metaLock = new AtomicBoolean(false);
-        } catch (IOException e) {
-            System.err.println(
-                "Check to make sure Server.config is in directory and server has read permission");
-            e.printStackTrace();
-        } catch (NumberFormatException e) {
-            System.err.println("Make sure the Server.cofig file is in correct format");
-            System.err.println("First Line holds socket number: default 2000");
-            System.err.println("Second line holds the maximum number of client: default 25");
-            e.printStackTrace();
-        }
+    public KVSNetworkAPI(){
+        // try {
+        //     // Open configuration file
+        //     BufferedReader br = new BufferedReader(new FileReader("Server.config"));
+        //     socketNumber = Integer.parseInt(br.readLine().trim());
+        //     maxClients = Integer.parseInt(br.readLine().trim());
+        //     metaLock = new AtomicBoolean(false);
+        // } catch (IOException e) {
+        //     System.err.println(
+        //         "Check to make sure Server.config is in directory and server has read permission");
+        //     e.printStackTrace();
+        // } catch (NumberFormatException e) {
+        //     System.err.println("Make sure the Server.cofig file is in correct format");
+        //     System.err.println("First Line holds socket number: default 2000");
+        //     System.err.println("Second line holds the maximum number of client: default 25");
+        //     e.printStackTrace();
+        // }
     }
     
-    @Override
+//    @Override --> Just make a function that handles adding and uses the KVS thread to add
     public void run() {
         // IpFinder.findIP();
         try (ServerSocket hostSocket = new ServerSocket(socketNumber)) {
@@ -61,15 +61,6 @@ public class KVSNetworkAPI {
             e.printStackTrace();
         }
     }
-
-    // Standard retrieval of Singleton in Java
-    public static KVSNetworkAPI getInstance() { 
-        if (singleton == null){  
-            singleton = new KVSNetworkAPI(); 
-        }
-        return singleton; 
-    }
-
 
     // get object from JSON file
     private HashMap<String, Object> deserializeJson(String jsonData) {
@@ -147,7 +138,7 @@ public class KVSNetworkAPI {
         private KVSNetworkAPI kvsAPI;
         ClientHandler(Socket socket) {
             this.socket = socket;
-            kvsAPI = KVSNetworkAPI.getInstance();
+//            kvsAPI = KVSNetworkAPI.getInstance();
         }
 
         @Override

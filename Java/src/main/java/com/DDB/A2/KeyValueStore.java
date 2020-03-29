@@ -1,3 +1,4 @@
+package src.main.java.com.DDB.A2;
 /* Abdullah Arif
 * Custom key value store structure for COMP-4680
 * T is the type for the key and G is the type for the Value */

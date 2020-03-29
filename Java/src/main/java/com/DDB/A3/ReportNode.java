@@ -1,201 +1,205 @@
 // Abdullah Arif
 // a runnable object that will be used to find and report to a node
-package src.main.java.com.DDB.A3;
+package main.java.com.DDB.A3;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.reflect.TypeToken;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintStream;
-import java.lang.reflect.Type;
-import java.net.*;
-import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.Set;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.net.SocketException;
+import java.net.SocketTimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
+
 
 public class ReportNode implements Runnable {
-	// how long till it node sends another alive signal
-	private static final long SLEEP_TIMER = 5000;
-	private static final int TIMEOUT = 10000;
-	private int socketNumber; // default 2000
+	private static final int TIMEOUT = 15000, MISSED_THRESHOLD=3;
+	private static final long MOURNING_PERIOD = TIMEOUT *2; // how long it node wait after leader is presumed dead
 	private PrintStream reportWriter;
 	private BufferedReader reportReader;
-	// private final ReentrantLock socketLock = new ReentrantLock();  // 
-	private AtomicBoolean updatingSocket, allowSocketUpdate, deleteNode;
+	private Peer peer;
 	private Socket reportSocket;
-
-	public ReportNode(int socketNumber) {
-		this.socketNumber = socketNumber;
-		updatingSocket = new AtomicBoolean(true);
-		allowSocketUpdate = new AtomicBoolean(true);
-		deleteNode = new AtomicBoolean(false);
+	private AtomicBoolean leader;
+	public ReportNode(Peer p) {
 		reportWriter = null;
-		reportSocket = null;
+		reportSocket = new Socket();
+		leader = new AtomicBoolean(false);
+		peer = p;
 	}
 
 	// Used to find and report to new report Node
 	public void run() {
-		// Run a separate thread to find and update the report node
-		Thread[] subThreads = new Thread[2];
-		subThreads[0] = new Thread(this::findReportNodes);
-		subThreads[1] = new Thread(this::getUpdateFromLeader);
-		for(Thread t: subThreads)
-			t.start();
+		boolean candidate = false;
+		int countMissedBeats = 0 ; // Used to count the times leader failed to response to us
+		String response; //hold response from leader
 
 		while (!Thread.interrupted()) {
 			// If we have a new report node then we have to wait for socket to be updated
-			if (updatingSocket.get()) {
-				allowSocketUpdate.lazySet(true);
-				while (reportSocket == null || updatingSocket.get())
-					; // If we are changing the socket then we have to wait
+			while(!reportSocket.isConnected() || reportSocket.isClosed()){
+				synchronized(reportSocket){
+					reportSocket.notifyAll(); /* remove all threads waiting for node*/
+					Thread t = new Thread(this::findReportNodes);
+					t.start();
+					try {
+						reportSocket.wait();
+						t.interrupt();
+						t.join();
+					} catch (InterruptedException e) {
+						e.printStackTrace();
+					}
+
+				}
+				
 			}
-			// Socket is now being used so you stop it from being changed
-			allowSocketUpdate.lazySet(false);
-			if (deleteNode.get()) {
-				closeConnection();
-				reportSocket = null;
-				deleteNode.set(false);
-			} else {
-				reportWriter.println("ALIVE");
-				try {
-					Thread.sleep(SLEEP_TIMER);
-				} catch (InterruptedException e) {
-					e.printStackTrace();
-					break;
+			
+			/* if an active candidate */
+			if(candidate && !leader.get()){ 
+				response = this.getResponse();
+				if(response.equals("ADD")){
+					/* get follower IP and add follower */
+					response = this.getResponse(); 
+					peer.addAllNodes(response);
+				}
+				response = this.getResponse();
+				if(response.equals("DELETE")){
+					response = this.getResponse(); /* get follower IP */
+					peer.removeAllNodes(response); /* delete follower */
 				}
 			}
-		}
+			// Handle response
+			response = this.getResponse();
+			if (response.equals("BYE") || countMissedBeats > MISSED_THRESHOLD) {
+				closeConnection();
+				if(candidate){
+					// Start leader transition after mourning period
+					try{
+						Thread.sleep(MOURNING_PERIOD);
+					} catch (InterruptedException e) {
+		                e.printStackTrace();
+		            }
+		            // become the leader
+					peer.setLeaderMode();
+					leader.lazySet(true); 
+				}
 
-		// Interrupt the thread that finds reports nodes
-		for (Thread t : subThreads) {
-			t.interrupt(); // Send message to stop
+				if(leader.get()){ // if a leader and your report node died that means you no longer have a candidate
+					peer.candidateDied();
+					candidate = false; // 
+				}
+			}
+			else if (response.equals("LEADER")){
+				if(candidate){
+					reportWriter.println("NO");
+				}
+				else{
+					leader.lazySet(true); /* you are now set to be a leader on next bye you will eave and become leader */
+					reportWriter.println("YES");
+					response = this.getResponse();
+					peer.addAllNodes(response);
+					candidate = true; /* as a candidate the leader will go through a mourning period and become a leader */
+				}
+			} 
+			else if (response.equals("CANDIDATE")){
+				try{
+					peer.addNode(reportSocket);
+					candidate = true;
+				} catch (IOException e){
+					candidate =false;
+				}
+				if (candidate)
+					reportWriter.println("YES");
+				else
+					reportWriter.println("NO");
+			} 
+			else if (response.equals("ALIVE?")){
+				reportWriter.println("ALIVE");
+			}
+			else if(response.equals("MISSED")){
+				countMissedBeats++;
+			}
+			else{
+				System.err.println("ERROR: Report node does not know how to handle the message \"" + response +"\"");
+			}
 		}
-
 	}
 
+	private String getResponse(){
+		String response = "BYE";
+		try{
+			response = reportReader.readLine().trim();
+			System.out.println("REPORT NODE RECEIVED: " + response);
+		} catch(SocketTimeoutException e){
+			e.printStackTrace();
+			response = "MISSED";
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		return response;
+	}
+	// functions returns true if node has an active node that it reports to
 	public boolean foundNode() {
-		// If socket is being actively updating on the current call then wait for the update
-		if (updatingSocket.get() && allowSocketUpdate.get())
-			while (updatingSocket.get()) ;
-		return reportSocket == null;
-
+		return reportSocket != null;
 	}
 
+	public synchronized void setCandidate(Socket s){
+		reportSocket.notifyAll();
+		reportSocket = s;
+		
+	}
+
+	public void setLeader(boolean b){
+		leader.lazySet(true);
+	}
 	// Close the threads safely
 	public void close() {
 		Thread.currentThread().interrupt();
 	}
 
-	public void deleteReportNode() {
-		deleteNode.set(true);
-	}
-
-//	// used by leader to set up their candidate node as their report leader --> Instead will make candidate node send a request to be leader
-//	public boolean setReportNode(int ip){
-//		// if deleting a report node then wait for thread to finish
-//		while(deleteNode.get()){
-//			while(!allowSocketUpdate.get()); // if deleting it may create a race-condition
-//		}
-//		// This function should not be called if we still have a report Node
-//		if(reportSocket != null){
-//			System.err.println("WARNING: TRIED TO MANUALLY SET IP ADDRESS OF A NON-EMPTY REPORT NODE")
-//			return false;
-//		}
-//		if(!allowSocketUpdate.get()){
-//			System.err.println("PERMISSION TO UPDATE SOCKET WAS DENIED");
-//		}
-//		try (Socket hostSocket = new Socket(InetAddress.getByName(ip), socketNumber)) {
-//			hostSocket.setSoTimeout(TIMEOUT); // IO calls should time out after 10 second
-//			reportSocket = hostSocket;
-//			reportWriter = new PrintStream(reportSocket.getOutputStream());
-//			reportReader = new BufferedReader( new InputStreamReader(reportSocket.getInputStream()) );
-//		}
-//	}
-
-	private void getUpdateFromLeader() {
-		while (!Thread.interrupted()) {
-			System.out.println("UPDATE FROM LEADER - SHOULD HAPPEN EVERY 10 SECONDS"); // ** DEBUG **
-			try {
-				while (reportSocket == null || updatingSocket.get())
-					; // If we are changing the socket then we have to wait
-				String response;
-				while ((response = reportReader.readLine()) != null) {
-					if (response.equals("DELETE")) {
-						deleteReportNode();
-						response = "";
-					}
-					if (response.equals("CANDIDATE")){
-						FollowerNodes f = FollowerNodes.getInstance();
-						f.add(reportSocket);
-					}
-				}
-			} catch (SocketTimeoutException ignored) { // This should be triggered because the socket set with a time out
-				System.out.println("** DELETE FROM ACTUAL CODE - TIME OUT CALL ** ");
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-		}
-	}
-
 	// Find or update the node that the current node will send the "heartbeat" signal
+	// If for someone reason things get way out of sync even with the built in wait - then allow manual SWITCH
 	private void findReportNodes() {
 		Socket potentialReport = null;
-		while (!Thread.interrupted()) {
-			try (ServerSocket hostSocket = new ServerSocket(socketNumber)) {
-				hostSocket.setSoTimeout(TIMEOUT); // IO calls should time out after 10 seconds
-				while (!hostSocket.isBound() && !Thread.interrupted()) {
+		System.out.println("Searching for node");
+		// while (!Thread.interrupted()) {
+		// default 80
+		int socketNumber = 80;
+		try (ServerSocket hostSocket = new ServerSocket(socketNumber)) {
+			hostSocket.setSoTimeout(TIMEOUT); // IO calls should time out after 10 seconds
+			while (potentialReport == null && !Thread.interrupted() && !reportSocket.isConnected()) { 
+				try {
 					potentialReport = hostSocket.accept();
-				}
-				if (Thread.interrupted()) {
-					throw new InterruptedException();
-				}
-				updatingSocket.lazySet(true);
-				while (!allowSocketUpdate.get()) ; // Thread needs to wait until main thread is done sending messages
-				if (getPermissionToSwitch()) { // We don't want node switching if there was miscommunication
-					// close up the old streams and sockets
-					if (reportSocket != null && !reportSocket.isClosed()) {
-						closeConnection();
+					if(potentialReport != null){
+						potentialReport.setSoTimeout(TIMEOUT);
 					}
-					reportSocket = potentialReport;
-					reportWriter = new PrintStream(reportSocket.getOutputStream());
-					reportReader = new BufferedReader(new InputStreamReader(reportSocket.getInputStream()));
-				}
-
-				updatingSocket.lazySet(false); // socket has been updated
-			} catch (IOException e) {
-				System.out.println("Socket could not be created, check processes permissions");
-				e.printStackTrace();
-			} catch (InterruptedException e) {
-				Thread.currentThread().interrupt();
-				System.out.println("Closed report node scanner");
-				break;
-			} catch (Exception e) {
-				System.out.println("Something went wrong :(");
-				e.printStackTrace();
+				} catch(SocketTimeoutException e) {potentialReport = null;}
 			}
-		}
-	}
-
-	// ask to switch and wait for reply for 10 seconds if no reply return true 
-	private boolean getPermissionToSwitch() {
-		reportWriter.println("SWITCH");
-		System.out.println("TRYING TO SWITCH NODES"); // ** DEBUG **
-		try {
-			String response = reportReader.readLine();
-			if (response.equals("NO"))
-				return false;
-		} catch (SocketTimeoutException e) { // This should be triggered because the socket set with a time out
-			System.out.println("Leader is presumed dead");
+			
+			if(potentialReport != null){
+				reportSocket.notifyAll(); // unfreeze the main thread
+				reportSocket = potentialReport; // replace the socket
+				reportWriter = new PrintStream(reportSocket.getOutputStream());
+				reportReader = new BufferedReader(new InputStreamReader(reportSocket.getInputStream()));
+			}
+			
+			if (Thread.interrupted()) {
+				throw new InterruptedException();
+			}
+		}  catch(SocketException e) {
 			e.printStackTrace();
+			System.err.println("Will remove this in a bit");
 		} catch (IOException e) {
+			System.err.println("ERROR: Socket could not be created, check processes permissions");
 			e.printStackTrace();
 		}
-		return true;
+		catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			System.out.println("Closed report node scanner");
+		}
+		finally{
+			reportSocket.notifyAll();
+		}
 	}
 
 	private void closeConnection() {
@@ -206,7 +210,7 @@ public class ReportNode implements Runnable {
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
-
+		reportSocket = new Socket();
 	}
 }
 

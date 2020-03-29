@@ -1,111 +1,293 @@
-package src.main.java.com.DDB.A3;
+package main.java.com.DDB.A3;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import com.google.gson.reflect.TypeToken;
 
 import java.io.IOException;
-import java.lang.reflect.Type;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.InetAddress;
-import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.Set;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.net.Socket;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
+/* Level is used to hold the current level of the node */
+enum Level {
+  UNNAMED_MEMBER,
+  FOLLOWER_LEVEL,
+  CANDIDATE_LEVEL,
+  LEADER_LEVEL
+}
 public class Peer implements Runnable{
-    // ** We can keep tracker node in linked list as we will iterate through them **
-    /* Tracking nodes
-        Keep track of candidate nodes, all joined nodes and all other leaders
-     */
-    public Gson gson; // Object used JSON conversion
-    private KeyValueStore<String, Object> kvs;  // Key Value store
-    private AtomicBoolean metaLock; // controls Access to key-value store
-    public ReportNode reportNode; // location of node that is waiting for the keep alive signal
-    // list of nodes that node is keeping track of - it will be empty for regular nodes
-    public LinkedList<FollowerNodes> followerNodes; // For candidate nodes it will always have one element in it
-    public Set<String> leaderNodes; // list of all leader nodes
-    public int storeAccessSocket; // Socket used for manipulation of the local key value store
-    // Used to figure out appropriate response time depending on node size
-    public AtomicInteger leastPopulatedNodeSize;
-    /*
-     If the previous node size was equivalent to leastPopulatedNodeSize the node will propose raising
-     - if a node has a lower number it will shout it to the group chat and the lowest proposed number will be the least populated node
+    /* Object used JSON conversion */
+    public Gson gson;
 
-     Buddy nodes hold each others data so if one fails the system does not lose data
-     // public **some data structure or just String if one Node ** friendNode;
+    /* Key Value store - used top store data */
+    private KVSNetworkAPI kvs;  
+
+    /*  Report node is used to send keep alive signal 
+    *   For candidate nodes it is also where they receive a list of followers to update their list
     */
+    public ReportNode reportNode; // send keep alive signal to this node 
 
-    public static void main(String[] args){
+    /*  list of nodes that node is keeping track of - it will be empty for regular nodes
+    *   For candidate nodes the nodes won't be active
+    */
+    public LinkedHashSet<FollowerNode> followers;
+    
+    /* Enum variable used to track state of the node*/
+    public Level level; 
+
+    /* Group chat handles the multi-cast functionality of the program 
+    *   it will be used to accept nodes by leaders
+    *   it will also be used to ensure uniqueness of name 
+    *   it is also where I plan on implementing remote calls to the KVS store ** UNIMPLMENTED **
+    */
+    public GroupChat gc;
+
+    /* The number of maximum follower a node can have */
+    public final int MAX_FOLLOWERS = 3; // ** TESTING NORMALLY 25 **
+
+    /* node refers to the candidate node */
+    public FollowerNode candidate;
+
+    /* Used to keep track of updates to the list */
+    private Set<String> addQueue, deleteQueue;
+
+    /*  ** Used to ensure data isn't loss from KVS on node failure ** */
+    // public **some data structure or just String if one Node ** friendNode;
+    
+
+    public static void main(String[] args) throws IOException{
         Peer p = new Peer();
         p.run();
     }
-    public Peer(){
-        reportNode = new ReportNode(2000);
-        kvs = new KeyValueStore<>();
-        metaLock = new AtomicBoolean(false);
-        leastPopulatedNodeSize = new AtomicInteger(0);
+
+    public Peer() throws  IOException{
+        reportNode = new ReportNode(this);
+        kvs = new KVSNetworkAPI();
         gson = new GsonBuilder().setPrettyPrinting().create();
+        followers = new LinkedHashSet<>();
+        addQueue = new HashSet<>();
+        deleteQueue = new HashSet<>();
+        FollowerNode.staticInitialize(this);
+        gc = new GroupChat("224.0.0.1", 80, this);
+        level = Level.UNNAMED_MEMBER; // start of as unnamed member
     }
+    
+    /* start all the needed thread then ** start the local KVS manipulation program ** */
     public void run(){
         // Start listening at its port for a node to become leader and if found then start reporting
-        new Thread(reportNode);
-//        new Thread();
-
-        joinNetwork(); // node will try to join an existing network
-//        if node gets report node it is part of a group - implemented below
-        while(!Thread.interrupted()){
-            Check if followers are alive // can do this for all of them
-            IF followers died remove from list // part of check follower function
-
-            if(!reportNode.foundNode()){ // founder
-                broadcast Arcibo message; group chat
-//                First node to join make report node in report Node
-            }
-            if(leader){ // if report node = first node in follower list
-                Check group chat to see if new node joined; // do in thread
-                Check another group chat to update number; // In thread that calls update number
-                Every time a node asks you if it is okay to have new leader you say nah; // in follower node
-                If you are full make your second node new leader and let the new half know they got new leader
-                If your candidate does not want to be candidate move it to back of list and make next node candidate and let candidate know
-
-            }
-            if(candidate){ // if report node not in followerNodes and followerNodes not empty then candidate
-                If leader dead become new leader and make your first node your report node;
-                Listen to leader to update your follower list; // Then you guys switch list size - your list should be one less then leader
-                If you do not want to be candidate let leader know - if they accept then you delete your follower list
-            }
-            if(follower){ // if you don't have any followers
-                // separate thread runs as soon as you become a follower - end when you become candidate or leader
-                Always be lsitening for a node to connect with you and declare themselves your new leader;
-                listen to leader if they tell you to switch leaders or become candidate; // in new thread
-                /* if a new node want to be your leader send you leader a request to change if no response then
-                 switch leader (leader dead).
-                 If leader tells you to switch leaders you change leaders
-                 */
-            }
+        new Thread(reportNode).start();
+        new Thread(gc).start(); // start listening to appropriate group chats
+        Scanner sc = new Scanner(System.in);
+        // first get name - ** probably change to random 64 bit string **
+        String name = "";
+        try {
+            do{
+                System.out.println("Please choose a username");
+                name = sc.nextLine();
+                System.out.println("Checking for username uniqueness");
+            } while(!gc.checkName(name));
+            System.out.println("Username accepted as unique");
+            joinNetwork(); // node will try to join an existing network
+            System.out.println("Past joining");
+//            System.out.println(gc.checkName(name));
+        } catch (IOException e) {
+            e.printStackTrace();
         }
+        // ** new thread allow for manipulation of KVS store locally like old client program **
+
         // Exit stuff --> put in finally
     }
-    /* function to join -  send message to join - node with fewest follower will become the leader of the new node
-    * For founder node - the first follower will become the report node and candidate node
-    * Returns true if it joined a network
-    */
-    public void joinNetwork(){
-        // ## Get group 1 in from setting from setting ##
-        // Get Ip address from class and use that as message
-        String message = IpFinder.findIP();
-        int tries=3; // ## get from setting ##
-        for(int i=1; i<=tries; i++){
-            try {
-                sendJoinPrompt(message, "230.0.0.0", 80); // ## Need to get from setting file ##
-            } catch (IOException e) {
-                e.printStackTrace();
-                break;
+
+    // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+    /* Handle node state */
+    /* Become the leader node - let group chat, report node and follower nodes know*/
+    public void setLeaderMode(){
+        /* Start checking follower health */
+        for(FollowerNode f : followers)
+            f.setCheckBeat(true);
+
+        /* start candidate managing thread */
+        new Thread(this::manageCandidateNodes).start();
+
+        /* Tell group-chat we have become a leader so that it can start looking for new nodes */
+        gc.setLeaderLevel();
+
+        /* Make the report node the leader */
+        reportNode.setLeader(true);
+    }
+
+    public boolean isLeader(){
+        return (level == Level.LEADER_LEVEL);
+    }
+
+    // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+    /* Handle follower Node interaction with peer node */
+    // public boolean needCandidate(){
+    //     return (level.get() == LEADER_LEVEL) && !(reportNode.foundNode());
+    // }
+
+    // remove a node considered dead - self-reported by dead node 
+    public synchronized void removeNode(FollowerNode f){
+        if(f==null) {
+            System.err.println("ERROR: Tried deleting null follower node");
+        }
+        else{
+            followers.remove(f);
+            /* Send update to follower if leader*/
+            if(this.isLeader() && reportNode.foundNode()){
+                deleteQueue.add(f.getIp());
             }
-            // Wait set out amount - while other listening in ReportNode program
+        }
+    }
+
+    /* used by candidate - when leader tells it that a node is dead */
+    public void removeNode(String ip){
+        this.removeNode(new FollowerNode(ip));
+    }
+
+    public void removeAllNodes(String json){
+        String[] followerNodes = gson.fromJson(json, String[].class);
+        for(String f : followerNodes){
+            this.removeNode(f);
+        }
+    }
+
+    /* Add function from the message received in multi-cast channel
+    * The reason it is synchronized is if we are waiting for multiple followers
+    * and we don't want to ask them all to be our candidate - so, we block 
+    */
+    public synchronized void addNode(Socket reportSocket) throws IOException {
+        FollowerNode f = new FollowerNode(reportSocket);
+        new Thread(f).start();
+        followers.add(f);
+        if(this.isLeader()){
+            f.setCheckBeat(true);
+        }
+        /* Send update to follower */
+        if(this.isLeader() && reportNode.foundNode()){
+            addQueue.add(reportSocket.getInetAddress().getHostAddress());
+        }
+        if(followers.size()>=MAX_FOLLOWERS){
+           this.delegateToNewLeader();
+        }
+    }
+
+    public void addNode(String ip){
+        FollowerNode f = new FollowerNode(ip);
+        new Thread(f).start();
+        followers.add(f);
+    }
+
+    public void addAllNodes(String json){
+        String[] followerNodes = gson.fromJson(json, String[].class);
+        for(String f : followerNodes){
+            this.addNode(f);
+        }
+    }
+
+    /* used to create a new leader when the node is full */
+    private synchronized void delegateToNewLeader(){
+        Iterator<FollowerNode> iterator = followers.iterator();
+        ArrayDeque<FollowerNode> removeNodes = new ArrayDeque<>();
+        ArrayDeque<String> ipAddressToRemove = new ArrayDeque<>();
+        FollowerNode removeNode;
+        int numElementsRemoved = followers.size()/2; // remove half the elements
+        while(numElementsRemoved >0 && iterator.hasNext()){
+            removeNode = iterator.next();
+            if(removeNode == candidate){ // don't want to remove candidate
+                continue;
+            }
+            removeNodes.add(removeNode);
+            ipAddressToRemove.add(removeNode.getIp());
+            numElementsRemoved--;
+        }
+        for(FollowerNode newLeader: removeNodes){
+            /* Don't send the new leader their own IP */
+            ipAddressToRemove.remove(newLeader.getIp());
+            newLeader.initiateLeaderElection(gson.toJson(ipAddressToRemove));
+            if(newLeader.isLeader()) // if node became leader then we are done
+                break;
+            ipAddressToRemove.add(newLeader.getIp());
+        }
+
+        /* Send good bye */
+        for(FollowerNode transferNode: removeNodes){
+            transferNode.killNode();
+        }       
+    }
+
+    
+    public String getAddQueue(){
+        /* if added got deleted then don't force node to add it then delete it */
+        addQueue.removeAll(deleteQueue);
+        String response = (addQueue.size()==0) ? "" : gson.toJson(addQueue);
+        /* clear queue after processing */
+        addQueue.clear(); 
+        return response;
+    }
+
+    public String getDeleteQueue(){
+        String response = (deleteQueue.size()==0) ? "" : gson.toJson(deleteQueue);
+        /* clear queue after processing */
+        deleteQueue.clear(); 
+        return response;
+    }
+
+    /* start thread to look for a possible candidate 
+    *  triggered when node becomes leader or by report node when candidate node dies
+    */
+    public void findCandidate(){
+        new Thread(this::manageCandidateNodes).start();
+    }
+    
+    public void setCandidate(FollowerNode f){
+        reportNode.setCandidate(f.getSocket());
+        candidate = f;
+        /* Create list of followers to send to follower */
+        for(FollowerNode f2 : followers){ 
+            if(f == f2){ // don't add follower to own list
+                continue;
+            }
+            addQueue.add(f2.getIp());
+        }
+    }
+
+    public void candidateDied(){
+        candidate = null;
+        this.findCandidate();
+    }
+
+    /* function to find and replacing candidate nodes -> It is run by leader node upon becoming a leader */
+    private void manageCandidateNodes (){
+        while(!reportNode.foundNode()){
+            for( FollowerNode f : followers){
+                f.initiateCandidateElection();
+                if(f.isCandidate()){
+                    break;
+                }
+            }
+        }
+        
+    }
+
+    // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+    /* Handle group chat interaction */
+    /* Get the KVS store used by node - used by group chat to allow remote manipulation */
+    public KVSNetworkAPI getKVSAPI(){
+        return kvs;
+    }
+
+    /* function to join -  send message to join - node with fewest follower will become the leader of the new node
+    *  For founder node - the first follower will become the report node and candidate node
+    *  Returns true if it joined a network
+    */
+    public void joinNetwork() throws IOException {
+        var ipSet = IpFinder.findIP();
+        GroupChat.Command message = gc.getJoinMessage(ipSet); // gets serialized version of join message
+        int tries=3; // ## get from setting ##
+        System.out.println("Attempting to join network please wait...");
+        for(int i=1; i<=tries; i++){
+            gc.sendCommand(message);
             try {
                 if (reportNode.foundNode()) // Don't want to go to sleep if we have already found a node
                     throw new InterruptedException();
@@ -118,35 +300,6 @@ public class Peer implements Runnable{
         }
     }
 
-    /* Function used to send the list of IP address to nodes listening for it*/
-    private void sendJoinPrompt(String message, String multicastAddress, int multicastPort) throws IOException {
-        DatagramSocket socket= new DatagramSocket();
-        InetAddress group = InetAddress.getByName(multicastAddress);
-        byte[] buf = message.getBytes(); // Send ip address
-        DatagramPacket packet = new DatagramPacket(buf, buf.length, group, multicastPort);
-        socket.send(packet);
-        socket.close();
-    }
-
-    /*
-    * On exit update setting file if possible - If leader node then tell candidate node that it has become leader node
-    */
-
-    /*
-    * If node is candidate node and its leader is presumed dead
-    * - send message to all follower node that you are their new reportNode node
-    */
-
-    /* Function to change report node */
-
-    /* If server full - tell second oldest node to take over as leader - until it gets first follower it report to node*/
-
-    /* Function to become a leader node - tell all leader node, then start scanning for dead follower (if any)
-     - and new nodes
-    */
-
-    /* Upon new node joining - if this the first node in follower node then make your reportNode */
-
-
+  
 
 }

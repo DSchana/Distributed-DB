@@ -1,7 +1,7 @@
 /* Abdullah Arif
 * COMP-4680
 * Class to find the IP-address of the server */
-package src.main.java.com.DDB.A3;
+package main.java.com.DDB.A3;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -10,12 +10,15 @@ import java.net.NetworkInterface;
 import java.net.URL;
 import java.util.Collections;
 import java.util.Enumeration;
+import java.util.HashSet;
+import java.util.Set;
 
 public class IpFinder {
 
-    public static String findIP() {
-        System.out.println("\nThe client may enter the following IP address to connect\n");
-        StringBuilder sb = new StringBuilder();
+    public static Object[] findIP() {
+//        System.out.println("\nThe client may enter the following IP address to connect\n");
+        // StringBuilder sb = new StringBuilder();
+        Set<String> sb = new HashSet<>();
         try {
             // System.out.println("\nIf client is on the local machine: ");
             // System.out.println(InetAddress.getLocalHost().getHostAddress().trim() + "\n");
@@ -30,7 +33,7 @@ public class IpFinder {
                         try {
                             if (inetAddress.isSiteLocalAddress() && inetAddress.isReachable(5)) {
                                 String s = inetAddress.toString();
-                                sb.append(s.substring(1) + ",");
+                                sb.add(s.substring(1));
                                
                             }
                         } catch (IOException e) { e.printStackTrace();}
@@ -42,7 +45,8 @@ public class IpFinder {
         } catch (Exception e) {
             System.out.println("Server info could not be read");
         }
-        return sb.toString();
+        System.out.println(sb);
+        return  sb.toArray();
     }
 
     // We can't use global address if we are trying to multi-cast
