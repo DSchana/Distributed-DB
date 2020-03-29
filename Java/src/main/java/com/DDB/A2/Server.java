@@ -1,4 +1,4 @@
-package src.main.java.com.DDB.A2;/* Abdullah Arif
+package main.java.com.DDB.A2;/* Abdullah Arif
 * COMP-4680
 * Multi-threaded server capable of handling multiple client simultaneously
 * implements all the basic key store operations for clients to use */

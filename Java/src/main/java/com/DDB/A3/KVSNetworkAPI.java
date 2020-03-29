@@ -3,8 +3,7 @@ package main.java.com.DDB.A3;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
-import java.io.BufferedReader;
-import java.io.FileReader;
+
 import java.io.IOException;
 import java.io.PrintStream;
 import java.lang.reflect.Type;
@@ -24,7 +23,8 @@ public class KVSNetworkAPI {
     private static KeyValueStore<String, Object> kvs;  // Key Value store
     private static AtomicBoolean metaLock; // controls Access to key-value store
     private static KVSNetworkAPI singleton = null;
-    private int socketNumber = 2000, maxClients = 25;
+    private final int socketNumber = 2000;
+    private final int maxClients = 25;
     public KVSNetworkAPI(){
         // try {
         //     // Open configuration file

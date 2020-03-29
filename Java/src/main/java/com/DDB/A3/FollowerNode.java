@@ -20,8 +20,10 @@ public class FollowerNode implements Runnable {
     private BufferedReader reader = null;
     private PrintStream writer = null;
     private int missedBeats = 0;
-    private AtomicBoolean kill;
-    private CountDownLatch checkBeat, becomeCandidate, becomeLeader;
+    private final AtomicBoolean kill;
+    private final CountDownLatch checkBeat;
+    private CountDownLatch becomeCandidate;
+    private CountDownLatch becomeLeader;
     private String ip; 
     private static final long SLEEP_TIMER = 5000;
     public static final int socketNumber = 80;
@@ -78,7 +80,7 @@ public class FollowerNode implements Runnable {
     public void run() {
         try {
             missedBeats = 0;
-            String response = "";
+            String response;
             while (missedBeats <= MISSED_BEATS_THRESHOLD && !kill.get()) {
                 /* if don't have to check the beat we just wait */
                 checkBeat.await();
@@ -115,12 +117,11 @@ public class FollowerNode implements Runnable {
                 writer.println("ALIVE?"); // Send prompt 
                 Thread.sleep(SLEEP_TIMER);
                 response = this.getResponse();
-                switch (response) {
-                    case "ALIVE": // If node alive clear the count of the times beat was missed
-                        this.clearMissedBeat();
-                        break;
-                    default: // case "MISSED":
-                        this.incrementMissedBeat();
+                // case "MISSED":
+                if ("ALIVE".equals(response)) { // If node alive clear the count of the times beat was missed
+                    this.clearMissedBeat();
+                } else {
+                    this.incrementMissedBeat();
                 }
                 if(candidate == this){ // if current node is the candidate it has to be update its follower list
                     
@@ -220,6 +221,7 @@ public class FollowerNode implements Runnable {
 
     /* on next cycle it run protocol to transition node into a new leader */
     public void initiateLeaderElection(String nodesToTransfer){
+        this.nodesToTransfer = nodesToTransfer;
         becomeLeader = new CountDownLatch(1);
     }
 

@@ -12,12 +12,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class GroupChat implements Runnable {
     protected final MulticastSocket socket;
     protected final InetAddress group;
-    private static Gson gson =  new GsonBuilder().setPrettyPrinting().create(); // Object used JSON conversion
-    private KVSNetworkAPI kvsAPI;
-    private Peer peer;
+    private static final Gson gson =  new GsonBuilder().setPrettyPrinting().create(); // Object used JSON conversion
+    private final KVSNetworkAPI kvsAPI;
+    private final Peer peer;
     private String name;
     private DatagramSocket writeSocket;
-    public static final int UNNAMED_MEMBER =-1, FOLLOWER_LEVEL=0, CANDIDATE_LEVEL=1, LEADER_LEVEL=2;
+    public static final int UNNAMED_MEMBER =-1, FOLLOWER_LEVEL=0,  LEADER_LEVEL=2; // CANDIDATE_LEVEL=1,
     private AtomicInteger level;
 
     /* Atomic boolean to control privileges 
@@ -41,9 +41,9 @@ public class GroupChat implements Runnable {
     // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
     /* Handle state of Group-chat */
     // return true if function currently does name have an accepted name
-    public boolean nameless(){
-        return this.name == null || this.name.equals("");
-    }
+//    public boolean nameless(){
+//        return this.name == null || this.name.equals("");
+//    }
 
     // Set group chat level to follower
     public void setFollowerLevel(){
@@ -184,11 +184,10 @@ public class GroupChat implements Runnable {
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
-        if (this.name.equals("")) // If name was reset it means it was denied
-            return false;
+        // If name was reset it means it was denied
+        return !this.name.equals("");
         // if name is unique return true and set privilege level
         // peer.becomeFollower();
-        return true;
     }
  
     // creates join message depending on the IP
@@ -200,7 +199,9 @@ public class GroupChat implements Runnable {
     // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
     /* Class used to quickly serialize commands before sending */
     public static class Command{
-        public String command, name, payload;
+        public final String command;
+        public final String name;
+        public final String payload;
         Command(String command, String name, String payload){
             this.command = command;
             this.name = name;

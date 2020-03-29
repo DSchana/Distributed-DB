@@ -2,12 +2,9 @@
 * COMP-4680
 * Class to find the IP-address of the server */
 package main.java.com.DDB.A3;
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
-import java.net.URL;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashSet;

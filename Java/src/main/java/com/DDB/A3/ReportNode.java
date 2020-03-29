@@ -19,9 +19,9 @@ public class ReportNode implements Runnable {
 	private static final long MOURNING_PERIOD = TIMEOUT *2; // how long it node wait after leader is presumed dead
 	private PrintStream reportWriter;
 	private BufferedReader reportReader;
-	private Peer peer;
+	private final Peer peer;
 	private Socket reportSocket;
-	private AtomicBoolean leader;
+	private final AtomicBoolean leader;
 	public ReportNode(Peer p) {
 		reportWriter = null;
 		reportSocket = new Socket();
@@ -173,7 +173,8 @@ public class ReportNode implements Runnable {
 					if(potentialReport != null){
 						potentialReport.setSoTimeout(TIMEOUT);
 					}
-				} catch(SocketTimeoutException e) {potentialReport = null;}
+				} catch(SocketTimeoutException e) {
+				}
 			}
 			
 			if(potentialReport != null){

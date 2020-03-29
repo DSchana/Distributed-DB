@@ -1,4 +1,4 @@
-package src.main.java.com.DDB.A2;/* Abdullah Arif
+package main.java.com.DDB.A2;/* Abdullah Arif
 * COMP-4680
 * Client class that will connect to the server 
 * implements all the basic key store operations */

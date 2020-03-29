@@ -6,7 +6,6 @@ import com.google.gson.GsonBuilder;
 import java.io.IOException;
 import java.net.Socket;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /* Level is used to hold the current level of the node */
 enum Level {
@@ -17,20 +16,20 @@ enum Level {
 }
 public class Peer implements Runnable{
     /* Object used JSON conversion */
-    public Gson gson;
+    public final Gson gson;
 
     /* Key Value store - used top store data */
-    private KVSNetworkAPI kvs;  
+    private final KVSNetworkAPI kvs;
 
     /*  Report node is used to send keep alive signal 
     *   For candidate nodes it is also where they receive a list of followers to update their list
     */
-    public ReportNode reportNode; // send keep alive signal to this node 
+    public final ReportNode reportNode; // send keep alive signal to this node
 
     /*  list of nodes that node is keeping track of - it will be empty for regular nodes
     *   For candidate nodes the nodes won't be active
     */
-    public LinkedHashSet<FollowerNode> followers;
+    public final LinkedHashSet<FollowerNode> followers;
     
     /* Enum variable used to track state of the node*/
     public Level level; 
@@ -49,7 +48,8 @@ public class Peer implements Runnable{
     public FollowerNode candidate;
 
     /* Used to keep track of updates to the list */
-    private Set<String> addQueue, deleteQueue;
+    private final Set<String> addQueue;
+    private final Set<String> deleteQueue;
 
     /*  ** Used to ensure data isn't loss from KVS on node failure ** */
     // public **some data structure or just String if one Node ** friendNode;
@@ -79,7 +79,7 @@ public class Peer implements Runnable{
         new Thread(gc).start(); // start listening to appropriate group chats
         Scanner sc = new Scanner(System.in);
         // first get name - ** probably change to random 64 bit string **
-        String name = "";
+        String name;
         try {
             do{
                 System.out.println("Please choose a username");
@@ -87,12 +87,14 @@ public class Peer implements Runnable{
                 System.out.println("Checking for username uniqueness");
             } while(!gc.checkName(name));
             System.out.println("Username accepted as unique");
+            gc.setFollowerLevel();
             joinNetwork(); // node will try to join an existing network
             System.out.println("Past joining");
 //            System.out.println(gc.checkName(name));
         } catch (IOException e) {
             e.printStackTrace();
         }
+
         // ** new thread allow for manipulation of KVS store locally like old client program **
 
         // Exit stuff --> put in finally
