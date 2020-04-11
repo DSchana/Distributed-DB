@@ -4,5 +4,5 @@ cd build
 cmake ..
 make all
 
-echo Creating config file
-cp ../ddb.config.default ./ddb.config
+echo Creating config files
+cp -r ../.config.default ./.config
