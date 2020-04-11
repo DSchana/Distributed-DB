@@ -1,13 +1,12 @@
 /* Abdullah Arif
 * Custom key value store structure for COMP-4680
 * T is the type for the key and G is the type for the Value */
-
+package main.java.com.DDB.A3;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import java.util.HashMap;
 
 public class KeyValueStore<T, G> {
-
     final HashMap<T, G> map;
 
     //Create

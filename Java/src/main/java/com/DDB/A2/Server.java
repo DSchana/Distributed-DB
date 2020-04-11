@@ -1,4 +1,4 @@
-/* Abdullah Arif
+package main.java.com.DDB.A2;/* Abdullah Arif
 * COMP-4680
 * Multi-threaded server capable of handling multiple client simultaneously
 * implements all the basic key store operations for clients to use */
@@ -34,7 +34,7 @@ public class Server {
         int socketNumber = 2000, maxClients = 25;
         try {
             // Open configuration file
-            BufferedReader br = new BufferedReader(new FileReader("Server.config"));
+            BufferedReader br = new BufferedReader(new FileReader("src/main/java/com/DDB/A2/Server.config"));
             socketNumber = Integer.parseInt(br.readLine().trim());
             maxClients = Integer.parseInt(br.readLine().trim());
         } catch (IOException e) {
@@ -63,6 +63,7 @@ public class Server {
             e.printStackTrace();
         } catch (Exception e) {
             System.out.println("Something went wrong :(");
+            e.printStackTrace();
         }
     }
 
