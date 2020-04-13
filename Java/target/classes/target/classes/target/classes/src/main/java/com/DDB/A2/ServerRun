@@ -1,0 +1,2 @@
+javac -cp '.:Jars/gson-2.8.6.jar' *.java -Xlint
+java -cp '.:Jars/gson-2.8.6.jar' Server 

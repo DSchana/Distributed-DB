@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.net.Socket;
 import java.util.*;
 
+
 /* Level is used to hold the current level of the node */
 enum Level {
   UNNAMED_MEMBER,
@@ -39,7 +40,7 @@ public class Peer implements Runnable{
     *   it will also be used to ensure uniqueness of name 
     *   it is also where I plan on implementing remote calls to the KVS store ** UNIMPLMENTED **
     */
-    public GroupChat gc;
+    public final GroupChat gc;
 
     /* The number of maximum follower a node can have */
     public final int MAX_FOLLOWERS = 3; // ** TESTING NORMALLY 25 **
@@ -75,7 +76,7 @@ public class Peer implements Runnable{
     /* start all the needed thread then ** start the local KVS manipulation program ** */
     public void run(){
         // Start listening at its port for a node to become leader and if found then start reporting
-        new Thread(reportNode).start();
+        new Thread(reportNode).start(); //
         new Thread(gc).start(); // start listening to appropriate group chats
         Scanner sc = new Scanner(System.in);
         // first get name - ** probably change to random 64 bit string **
@@ -89,6 +90,10 @@ public class Peer implements Runnable{
             System.out.println("Username accepted as unique");
             gc.setFollowerLevel();
             joinNetwork(); // node will try to join an existing network
+            if(!reportNode.foundNode()){
+                this.setLeaderMode();
+                System.out.println("Became a leader");
+            }
             System.out.println("Past joining");
 //            System.out.println(gc.checkName(name));
         } catch (IOException e) {
@@ -115,7 +120,9 @@ public class Peer implements Runnable{
         gc.setLeaderLevel();
 
         /* Make the report node the leader */
-        reportNode.setLeader(true);
+        reportNode.setLeader();
+
+        level = Level.LEADER_LEVEL;
     }
 
     public boolean isLeader(){
@@ -127,6 +134,10 @@ public class Peer implements Runnable{
     // public boolean needCandidate(){
     //     return (level.get() == LEADER_LEVEL) && !(reportNode.foundNode());
     // }
+    /* Return if node is already added as active follower */
+    public boolean containsFollower(String ip){
+        return followers.contains(new FollowerNode(ip));
+    }
 
     // remove a node considered dead - self-reported by dead node 
     public synchronized void removeNode(FollowerNode f){
@@ -162,7 +173,7 @@ public class Peer implements Runnable{
         FollowerNode f = new FollowerNode(reportSocket);
         new Thread(f).start();
         followers.add(f);
-        if(this.isLeader()){
+        if(this.isLeader() ){
             f.setCheckBeat(true);
         }
         /* Send update to follower */
@@ -178,6 +189,8 @@ public class Peer implements Runnable{
         FollowerNode f = new FollowerNode(ip);
         new Thread(f).start();
         followers.add(f);
+        if(followers.size() == 1)
+            f.setCheckBeat(true);
     }
 
     public void addAllNodes(String json){
@@ -279,6 +292,16 @@ public class Peer implements Runnable{
         return kvs;
     }
 
+//    /* Used by candidate node to stay updated with leader list leader by removing leader who have failed */
+//    public void removeAllLeaderNodes(String leaderIPs) {
+//        gc.addLeader(leaderIPs);
+//    }
+//
+//    /* Used by candidate node to stay updated with leader list leader by adding in nodes who became leaders*/
+//    public void addAllLeaderNodes(String leaderIPs) {
+//         gc.removeLeader(leaderIPs);
+//    }
+
     /* function to join -  send message to join - node with fewest follower will become the leader of the new node
     *  For founder node - the first follower will become the report node and candidate node
     *  Returns true if it joined a network
@@ -293,15 +316,16 @@ public class Peer implements Runnable{
             try {
                 if (reportNode.foundNode()) // Don't want to go to sleep if we have already found a node
                     throw new InterruptedException();
-                Thread.sleep(1500 * i); // slowly backs off - to give nodes time to process things as needed
+                Thread.sleep(5000 * i); // slowly backs off - to give nodes time to process things as needed
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 System.out.println("Assumed network was joined");
+                level = Level.FOLLOWER_LEVEL;
                 break;
             }
         }
     }
 
-  
+
 
 }

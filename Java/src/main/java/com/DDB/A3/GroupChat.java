@@ -6,6 +6,8 @@ import com.google.gson.GsonBuilder;
 
 import java.io.IOException;
 import java.net.*;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 // imports
@@ -18,6 +20,7 @@ public class GroupChat implements Runnable {
     private String name;
     private DatagramSocket writeSocket;
     public static final int UNNAMED_MEMBER =-1, FOLLOWER_LEVEL=0,  LEADER_LEVEL=2; // CANDIDATE_LEVEL=1,
+//    private Set<String> leaderList;
     private AtomicInteger level;
 
     /* Atomic boolean to control privileges 
@@ -36,6 +39,7 @@ public class GroupChat implements Runnable {
         writeSocket = new DatagramSocket();
         socket.joinGroup(group);
         level = new AtomicInteger(UNNAMED_MEMBER);
+//        leaderList = new HashSet<>();
     }
 
     // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
@@ -102,22 +106,22 @@ public class GroupChat implements Runnable {
                 break;
              // Check if message can be handled at Leader level if node is a leader
             case LEADER_LEVEL: 
-                // updateLeaderList();
+                // this.updateLeaderList();
                 if (command.equals("GREETINGS")) {// need name to add and payload is IP address
                     // assuming name hasn't been taken - if it has it might mess up the kvs calls
                     acceptNode(gson.fromJson(message.payload, String[].class));
                 }
             // INTENTIONAL FALL THROUGH HERE!
             // Check if message can be handle at candidate if node is at-least a candidate
-            // case CANDIDATE_LEVEL:
-            //     switch (command) {
-            //         case "NEW":
-            //             System.err.println("ERROR: Trying to add leader. Already have shared leader chat");
-            //             break;
-            //         case "DEAD":
-            //             System.err.println("ERROR: Trying to delete leader. Already have shared leader chat");
-            //             break;
-            //     }       
+//             case CANDIDATE_LEVEL:
+//                 switch (command) {
+//                     case "NEW":
+//                         System.err.println("ERROR: Trying to add leader. Already have shared leader chat");
+//                         break;
+//                     case "DEAD":
+//                         System.err.println("ERROR: Trying to delete leader. Already have shared leader chat");
+//                         break;
+//                 }
             // INTENTIONAL FALL THROUGH HERE! 
             default: // Lastly, check if message can be handled at follower level
                 switch (command) {
@@ -133,14 +137,27 @@ public class GroupChat implements Runnable {
     }
 
     /* Using the list of ip addresses from the greeting  */
-    private void acceptNode(String[] ips) {
+    private synchronized void acceptNode(String[] ips) {
+        System.out.println("Received the following ips " + ips);
         for(String ip : ips){
+            if(peer.containsFollower(ip)){
+                System.out.println("Already have follower disregarding call ");
+                break;
+            }
             Socket s = new Socket();
             try {
-                InetAddress address = InetAddress.getByName(ip);
+                var address =  new InetSocketAddress(InetAddress.getByName(ip), FollowerNode.socketNumber);
+                System.out.println("Trying address " + address);
                 // 30 seconds wait to accept
-                s.connect( new InetSocketAddress(address, FollowerNode.socketNumber), 30000 );
-                peer.addNode(s); // if successful then add node
+                s.connect(address,30000);
+                if(s.getRemoteSocketAddress().equals(s.getLocalSocketAddress())){
+                    System.err.println("WARNING: Attempted to connect to self - check for multiple running instances");
+                    break;
+                }
+                if(s.isConnected()) {
+                    peer.addNode(s); // if successful then add node
+                    break;
+                }
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -153,7 +170,7 @@ public class GroupChat implements Runnable {
     public void sendCommand(Command command) throws IOException {
         String message = gson.toJson(command);
         System.out.println("NODE " + name + " send out " + message);
-        // send command to group chat 
+        // send command to group chat
         byte[] buf = message.getBytes(); // Send the serialized command
         DatagramPacket packet = new DatagramPacket(buf, buf.length, group, 80);
         writeSocket.send(packet);
@@ -180,7 +197,7 @@ public class GroupChat implements Runnable {
         this.name = name;
         // Wait for someone to deny you a name
         try {
-            Thread.sleep(20000); // wait 20 seconds for a reply ** May change to 30 depending on the other timers **
+            Thread.sleep(15000); // wait 20 seconds for a reply ** May change to 30 depending on the other timers **
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
@@ -195,6 +212,17 @@ public class GroupChat implements Runnable {
         String message = GroupChat.gson.toJson(ipSet);
         return new Command("GREETINGS", this.name, message);
     }
+
+//    public void addLeader(String leaderIPs ){
+//        String[] ipArray= gson.fromJson(leaderIPs, String[].class);
+//        leaderList.addAll(Arrays.asList(ipArray));
+//    }
+//
+//    public void removeLeader(String leaderIPs) {
+//        String[] ipArray= gson.fromJson(leaderIPs, String[].class);
+//        leaderList.removeAll(Arrays.asList(ipArray));
+//    }
+
 
     // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
     /* Class used to quickly serialize commands before sending */
