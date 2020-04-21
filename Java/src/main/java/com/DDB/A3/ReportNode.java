@@ -49,11 +49,12 @@ public class ReportNode implements Runnable {
 				synchronized(socketWorks) {
 					socketWorks.lock(); /* remove all threads waiting for node */
 					Thread t = new Thread(this::findReportNodes);
-					if( !(peer.isLeader()|| candidate)) {
+					if( !(peer.isLeader()) && !candidate) {
 						t.start();
 					}
 					try {
-						socketFree.await(5, TimeUnit.SECONDS);
+						/* Candidate and socket will just wait for a new candidate to be made*/
+						socketFree.await();
 						t.interrupt();
 						t.join();
 					} catch (InterruptedException e) {
@@ -61,7 +62,7 @@ public class ReportNode implements Runnable {
 					}
 				}
 			}
-			// System.out.println("In report node main loop");
+//			 System.out.println("In report node main loop");
 			
 			/* if an active candidate */
 			if(candidate && !leader.get()){

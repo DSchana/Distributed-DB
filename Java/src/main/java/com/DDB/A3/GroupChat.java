@@ -110,7 +110,7 @@ public class GroupChat implements Runnable {
                 }
             // INTENTIONAL FALL THROUGH HERE! 
             case FOLLOWER_LEVEL: // Lastly, check if message can be handled at follower level
-                if (command.equals("RETURNER")){//  ** will be used for next part to create one on one connection for RPC calls **
+                if (command.equals("RETURNER")){
                     String[] ips = gson.fromJson(message.payload, String[].class);
                     if(ips.length >0){
                         peer.checkReturner(message.name, ips[0]);
@@ -118,6 +118,10 @@ public class GroupChat implements Runnable {
                     else {
                         System.err.println("ERROR: FOUND NO IP ADDRESSES IN RETURNER");
                     }
+                }
+
+                if (command.equals("DELETE ARCHIVE")){
+                    peer.deleteArchive(message.name);
                 }
             default: // INTENTIONAL FALL THROUGH HERE! 
                 if (command.equals("DENY NAME"))

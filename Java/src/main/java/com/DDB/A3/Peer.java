@@ -301,12 +301,21 @@ public class Peer implements Runnable{
     /* function to find and replacing candidate nodes -> It is run by leader node upon becoming a leader */
     private void manageCandidateNodes (){
         while(!reportNode.foundNode()){
-            for( FollowerNode f : followers){
-                f.initiateCandidateElection();
-                if(f.isCandidate()){
-                    break;
+
+            while(!reportNode.foundNode()) {
+                try{
+                    for (FollowerNode f : followers) {
+                        f.initiateCandidateElection();
+                        if (f.isCandidate()) {
+                            break;
+                        }
+                    }
+                }catch(Exception e){
+                    e.printStackTrace();
                 }
+
             }
+
         } 
     }
 
@@ -374,8 +383,9 @@ public class Peer implements Runnable{
     // }
 
     /*Used to add all the old data back to KVS */
-    public void addOldData(HashMap<String, Object> values){
+    public void addOldData(HashMap<String, Object> values) throws IOException{
         kvs.addAll(values);
+        gc.sendCommand("DELETE ARCHIVE");
     }
     /* Used by returning node to get back old data */ 
     private void retrieveOldData() throws IOException {
@@ -403,6 +413,13 @@ public class Peer implements Runnable{
         backupNode.checkReturner(name, ip , config.backupTargetPort);
     }
 
+    public void deleteArchive(String name){
+        backupNode.deleteArchive(name);
+    }
+    /* Add archive to backup node */
+    public void addArchive(String name, HashMap<String, Object> data){
+        backupNode.addArchive(name, data);
+    }   
     private static class Config{
         public final int receiveFollowerSocket = 2001;
         public final int targetFollowerSocket = 2000;
@@ -410,9 +427,9 @@ public class Peer implements Runnable{
         public final String groupChatIP = "224.0.0.1";
         public final int backupAcceptPort = 101;
         public final int backupTargetPort = 100;
-        public final int joinTries = 2;
+        public final int joinTries = 1;
         public final int retrieveTries = 2;
-        public final String oldName = "A"; //!nameless
+        public final String oldName = "<XXXX>"; //!nameless
         public final int nameLength = 4;
     }
 }

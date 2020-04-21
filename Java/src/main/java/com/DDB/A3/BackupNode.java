@@ -49,7 +49,7 @@ public class BackupNode implements Runnable{
         backupMap = new HashMap<>();
         archivalMap = new HashMap<>();
         backupWriter = new HashSet<>();
-        maxClients = 3; 
+        maxClients = 30;
         this.socketNumber = socketNumber;
         gson = new Gson();
         retrieved = false;
@@ -67,7 +67,7 @@ public class BackupNode implements Runnable{
                 var newWriter = new PrintStream(backupSocket.getOutputStream());
                 var newReader = new BufferedReader(new InputStreamReader(backupSocket.getInputStream()));
                 
-                newWriter.println(peer.getName());
+                newWriter.println("!nameless");
                 do{
                     /* Tell target node how much items you have*/
                     newWriter.println(data.count());
@@ -75,8 +75,6 @@ public class BackupNode implements Runnable{
                     newWriter.println(data.getAll());
                 } while(!newReader.readLine().trim().equals("SUCCESS"));
                 newWriter.println("YOUR STUFF");
-                archivalMap.remove(name);
-
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -101,7 +99,7 @@ public class BackupNode implements Runnable{
             e.printStackTrace();
         }
     }
-    /* inform all nodes about change in back up node so they can change their next in line - ** MUST CATCH IN KVSNetworok API ** */ 
+    /* inform all nodes about change in back up node so they can change their next in line  */
     public void informBackupChanged(String newBackupInfo) {
         for( var p: backupWriter){
             p.println("BACKUP CHANGE");
@@ -109,6 +107,17 @@ public class BackupNode implements Runnable{
         }
     }
 
+    public void addArchive(String name, HashMap<String, Object> data){
+        if(!archivalMap.containsKey(name)){
+            var tmpKVS = new KVSNetworkAPI();
+            tmpKVS.addAll(data);
+            archivalMap.put(name, tmpKVS);
+        }
+    }
+
+    public void deleteArchive(String name){
+        archivalMap.remove(name);
+    }
     private class Backups implements Runnable {
 
         private final Socket socket;
@@ -133,7 +142,7 @@ public class BackupNode implements Runnable{
                 /* loop while backupMap is active */
                 do {
                     var json = r.readLine();
-                    // System.out.println("JSON"+json);
+                     System.out.println("JSON"+json);
                     try{
                         command = gson.fromJson(json, KVSCommandObject.class);
                     }catch (NullPointerException e){
@@ -149,13 +158,13 @@ public class BackupNode implements Runnable{
                 System.out.println("Error:" + socket);
                 e.printStackTrace();
             } finally {
-                if(backupWriter.contains(p)){
-                    backupWriter.remove(p);
-                }
+                backupWriter.remove(p);
                 if(backupMap.containsKey(name)){
                     backupMap.remove(name);
                     if(!name.equals("FAILED")){
                         archivalMap.put(name,this.backupKVS);
+                        /* Give back up to your back so it is at-least in two nodes*/
+                        this.duplicateArchiveKVS(name, this.backupKVS);
                         System.out.println("added archive");
                     }
                 }
@@ -165,6 +174,14 @@ public class BackupNode implements Runnable{
             }
         }
 
+        private void duplicateArchiveKVS(String name, KVSNetworkAPI archive){
+            String archiveInfo = archive.toString();
+            for( var p: backupWriter){
+                p.println("ADD ARCHIVE");
+                p.println(name);
+                p.println(archiveInfo);
+            }
+        }
         private void greetingExchange() throws IOException {
 
             /* Ask for old stuff - if leader can find they will connect with the other back up and get*/
@@ -172,7 +189,7 @@ public class BackupNode implements Runnable{
             name = r.readLine();
             /* Add backup to map */ 
             backupMap.put(name, this.backupKVS);
-            HashMap<String, Object> values = null;
+            HashMap<String, Object> values = new HashMap<>();
             while(response.equals("FAIL")){
                 /* Get count */
                 int count = Integer.parseInt(r.readLine().trim());
@@ -185,8 +202,8 @@ public class BackupNode implements Runnable{
                
                 if(values.size() == count){
                     response = "SUCCESS";
+                    backupKVS.addAll(values);
                 }
-                backupKVS.addAll(values);
                 p.println(response);
             }
             var status = r.readLine().trim();
@@ -195,7 +212,6 @@ public class BackupNode implements Runnable{
                  /* If, the node reaching out to you is the leader node get info for your */
                     var ip = r.readLine();
                     // System.out.println("ip"+ ip);
-                    var port = Integer.parseInt(r.readLine().trim());
                     // System.out.println(port);
                     peer.setBackup(ip);
                     backupWriter.add(p);
@@ -203,15 +219,16 @@ public class BackupNode implements Runnable{
                 case "YOUR STUFF":
                     /* Get rid of the backup because the nice node was only giving you your stuff back */
                     backupMap.remove(name);
-                    name="FAILED";
                     peer.addOldData(values);
                     retrieved = true;
                     break;
-                default: /* case "NORMAL": */
+                default: /* case "NORMAL": 
                     /* In default case the last back up node just died so give them your next back up node as their next in line*/
                     p.println(backupKVS.getBackupIP());
-                    p.println(backupKVS.getBackupPort());
+//                    p.println(backupKVS.getBackupPort());
+                    /* Tell the number of stuff in your archive KVS then give it all to it*/
                     backupWriter.add(p);
+                    archivalMap.forEach(this::duplicateArchiveKVS);
             }            
         }
 

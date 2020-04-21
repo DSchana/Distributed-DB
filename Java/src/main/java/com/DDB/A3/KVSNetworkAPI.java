@@ -74,6 +74,12 @@ public class KVSNetworkAPI {
         kvs = new KeyValueStore<>();
     }
     
+    @Override
+    public String toString(){
+        if( kvs == null)
+            return "[]";
+        return kvs.toString();
+    }
     /* A one time initialization done at the start of the program*/
     public static void staticInitialize(Peer p, int socketNumber){
         peer = p;
@@ -96,13 +102,6 @@ public class KVSNetworkAPI {
                     this.setBackup(nextInLineIP);
                 }
             }
-            if(backupWriter == null && backupSocket.isConnected()){
-                this.initializeBackup();
-                var backupListener = new BackupListener(backupReader);
-                new Thread(backupListener).start();
-                /* ** LISTEN TO NODE THAT IS YOUR BACK UP IN SEPARATE THREAD FOR UPDATE TO NEXT IN LINE  ** */
-            }
-
                 commandValue = -1;
                 while(commandValue == -1){
                     KVSNetworkAPI.userPrompt();
@@ -321,6 +320,7 @@ public class KVSNetworkAPI {
         } catch (IOException e) {
             e.printStackTrace();
         }
+        this.initializeBackup();
     }
   
 
@@ -328,10 +328,10 @@ public class KVSNetworkAPI {
         PrintStream newWriter = null;
         BufferedReader newReader = null;
         try {
-            
             newWriter = new PrintStream(backupSocket.getOutputStream());
             newReader = new BufferedReader(new InputStreamReader(backupSocket.getInputStream()));
             newWriter.println(peer.getName());
+            System.err.println("My name is "+ peer.getName());
             do{
                 /* Tell backup node how much items you have*/
                 newWriter.println(this.count());
@@ -341,27 +341,29 @@ public class KVSNetworkAPI {
             } while(!newReader.readLine().trim().equals("SUCCESS"));
             if(peer.isLeader()){
                 newWriter.println("LEADER");
-                if(backupWriter != null){
-                    /*  if old writer is active (will be for leaders) let the back up know you are leaving */
-                    backupWriter.println("RELIEVE"); 
-                    backupWriter.close();
-                }
                 /* If we have last socket send that to the new node to add - otherwise the leader is a lone node and will add itself */
-                if (lastSocket != null){
+                if (lastSocket != null && backupWriter != null){
+                    /* If the same node becomes your backup don' relieve it */
+                    if(!lastSocket.getInetAddress().getHostAddress()
+                            .equals(backupSocket.getInetAddress().getHostAddress())) {
+                         /*  if old writer is active (will be for leaders) let the back up know you are leaving */
+                        backupWriter.println("RELIEVE");
+                        backupWriter.close();
+                    }
                     newWriter.println(lastSocket.getInetAddress().getHostAddress());
-                    newWriter.println(lastSocket.getPort());
+//                    newWriter.println(lastSocket.getPort());
                 }
                 else{
                     newWriter.println(backupSocket.getLocalAddress().getHostAddress());
-                    newWriter.println(backupSocket.getLocalPort());
+//                    newWriter.println(backupSocket.getLocalPort());
                 }
             }
             /* Normal case: old back up died so you make a new back up */
             else{
                 newWriter.println("NORMAL");
                 String ip = newReader.readLine();
-                int sn = Integer.parseInt(newReader.readLine());
-                this.setNextInLine(ip, sn);
+
+                this.setNextInLine(ip);
             }
           
             
@@ -369,9 +371,12 @@ public class KVSNetworkAPI {
 //            e.printStackTrace();
         }
         finally {
-            if (newReader != null )
-            backupReader = newReader;
-            backupWriter = newWriter;
+            if (newReader != null ) {
+                backupReader = newReader;
+                backupWriter = newWriter;
+                var backupListener = new BackupListener(backupReader);
+                new Thread(backupListener).start();
+            }
         }
         return backupWriter != null && backupReader != null; 
     }
@@ -380,19 +385,14 @@ public class KVSNetworkAPI {
         if(backupSocket == null || !backupSocket.isConnected()){
             return "NONE";
         }
-        return backupSocket.getInetAddress().getHostAddress().toString();
+        return backupSocket.getInetAddress().getHostAddress();
     }
 
-    public String getBackupPort(){
-        return String.valueOf(nextInLinePortNumber);
-    }
-
-    public void setNextInLine(String ip, int socketNumber){
-        if (!(ip.equals(backupSocket.getLocalAddress().getHostAddress()) && socketNumber == backupSocket.getLocalPort())) {
+    public void setNextInLine(String ip){
+        if (!(ip.equals(backupSocket.getLocalAddress().getHostAddress()))) {
             // As long as it is not adding itself - it should add the next in line
             System.out.println("Added the IP " + ip + " as next in line ");
             nextInLineIP = ip;
-            nextInLinePortNumber = socketNumber;
         }
     }
 
@@ -440,6 +440,16 @@ public class KVSNetworkAPI {
                         KVSCommandObject command = gson.fromJson(json, KVSCommandObject.class);
                         System.out.println("Back up changer received command " + command.command);
                         nextInLineIP = command.key;
+                    }
+                    else if (prompt.trim().equals("ADD ARCHIVE")) {
+                        var name = reader.readLine();
+                        json = reader.readLine();
+                        System.out.println("Adding archive " + json);
+                        if(json == null)
+                            continue;
+                        Type collectionType = new TypeToken<HashMap<String, Object>>(){}.getType();
+                        HashMap<String,Object> archive = gson.fromJson(json,collectionType);
+                        peer.addArchive(name, archive);
                     }
                 }
             }  catch (IOException e) {
