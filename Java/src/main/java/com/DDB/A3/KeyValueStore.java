@@ -66,7 +66,7 @@ public class KeyValueStore<T, G> {
 
     @Override
     public String toString() {
-        Gson gson = new GsonBuilder().setPrettyPrinting().create();
+        Gson gson = new Gson();
         return gson.toJson(map);
     }
 

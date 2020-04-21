@@ -9,18 +9,19 @@ import java.net.*;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.sql.Timestamp;
 
 // imports
 public class GroupChat implements Runnable {
     protected final MulticastSocket socket;
     protected final InetAddress group;
-    private static final Gson gson =  new GsonBuilder().setPrettyPrinting().create(); // Object used JSON conversion
+    private static final Gson gson =  new Gson(); // Object used JSON conversion
     private final KVSNetworkAPI kvsAPI;
     private final Peer peer;
     private String name;
     private DatagramSocket writeSocket;
     public static final int UNNAMED_MEMBER =-1, FOLLOWER_LEVEL=0,  LEADER_LEVEL=2; // CANDIDATE_LEVEL=1,
-//    private Set<String> leaderList;
+    private long initialTime;
     private AtomicInteger level;
 
     /* Atomic boolean to control privileges 
@@ -39,6 +40,8 @@ public class GroupChat implements Runnable {
         writeSocket = new DatagramSocket();
         socket.joinGroup(group);
         level = new AtomicInteger(UNNAMED_MEMBER);
+        Timestamp timestamp = new Timestamp(System.currentTimeMillis());
+        initialTime = timestamp.getTime();
 //        leaderList = new HashSet<>();
     }
 
@@ -99,46 +102,39 @@ public class GroupChat implements Runnable {
         String command = message.command;
         
         switch(level.get()){
-            case UNNAMED_MEMBER: // separated because we don't want legit nodes deleting their own name
-                if (command.equals("DENY NAME"))
-                    if(message.name.equals(this.name))
-                        this.name = "";
-                break;
-             // Check if message can be handled at Leader level if node is a leader
             case LEADER_LEVEL: 
                 // this.updateLeaderList();
                 if (command.equals("GREETINGS")) {// need name to add and payload is IP address
                     // assuming name hasn't been taken - if it has it might mess up the kvs calls
                     acceptNode(gson.fromJson(message.payload, String[].class));
                 }
-            // INTENTIONAL FALL THROUGH HERE!
-            // Check if message can be handle at candidate if node is at-least a candidate
-//             case CANDIDATE_LEVEL:
-//                 switch (command) {
-//                     case "NEW":
-//                         System.err.println("ERROR: Trying to add leader. Already have shared leader chat");
-//                         break;
-//                     case "DEAD":
-//                         System.err.println("ERROR: Trying to delete leader. Already have shared leader chat");
-//                         break;
-//                 }
             // INTENTIONAL FALL THROUGH HERE! 
-            default: // Lastly, check if message can be handled at follower level
-                switch (command) {
-                    case "NAME": //checkName
-                    if (message.name.equals(this.name))
+            case FOLLOWER_LEVEL: // Lastly, check if message can be handled at follower level
+                if (command.equals("RETURNER")){//  ** will be used for next part to create one on one connection for RPC calls **
+                    String[] ips = gson.fromJson(message.payload, String[].class);
+                    if(ips.length >0){
+                        peer.checkReturner(message.name, ips[0]);
+                    }
+                    else {
+                        System.err.println("ERROR: FOUND NO IP ADDRESSES IN RETURNER");
+                    }
+                }
+            default: // INTENTIONAL FALL THROUGH HERE! 
+                if (command.equals("DENY NAME"))
+                    if(message.name.equals(this.name) && level.get() == UNNAMED_MEMBER)
+                        this.name = "";
+                if (command.equals("NAME") ){ //checkName
+                    //  name is unique - so if someone tries taking it they must have a different time stamp
+                    // Could potentially also check the IP - in case by some coincidence - two nodes made the same name with the same name
+                    if (message.name.equals(this.name) && initialTime != message.timeSent ) 
                         this.sendCommand("DENY NAME");
-                        break;
-                    case "CONNECT": //  ** will be used for next part to create one on one connection for RPC calls ** 
-                        System.err.println("ERROR: Trying to make a remote call to KVS. Implemented for next assignment");
-                        break;
                 }
         }
     }
 
-    /* Using the list of ip addresses from the greeting  */
+    /* Using the list of ip addresses from the greeting */
     private synchronized void acceptNode(String[] ips) {
-        System.out.println("Received the following ips " + ips);
+        // System.out.println("Received the following ips " + ips);
         for(String ip : ips){
             if(peer.containsFollower(ip)){
                 System.out.println("Already have follower disregarding call ");
@@ -147,8 +143,8 @@ public class GroupChat implements Runnable {
             Socket s = new Socket();
             try {
                 var address =  new InetSocketAddress(InetAddress.getByName(ip), FollowerNode.socketNumber);
-                System.out.println("Trying address " + address);
-                // 30 seconds wait to accept
+                // System.out.println("Trying address " + address);
+                /* 30 seconds wait to accept */
                 s.connect(address,30000);
                 if(s.getRemoteSocketAddress().equals(s.getLocalSocketAddress())){
                     System.err.println("WARNING: Attempted to connect to self - check for multiple running instances");
@@ -169,7 +165,7 @@ public class GroupChat implements Runnable {
     /* Send network command */
     public void sendCommand(Command command) throws IOException {
         String message = gson.toJson(command);
-        System.out.println("NODE " + name + " send out " + message);
+        // System.out.println("NODE " + name + " send out " + message);
         // send command to group chat
         byte[] buf = message.getBytes(); // Send the serialized command
         DatagramPacket packet = new DatagramPacket(buf, buf.length, group, 80);
@@ -184,15 +180,15 @@ public class GroupChat implements Runnable {
 
     /* Send remote commands with no arguments */
     public void sendCommand(String commandName) throws IOException{
-         Command command = new Command(commandName, this.name);
-         this.sendCommand(command);
+        Command command = new Command(commandName, this.name);
+        this.sendCommand(command);
     }
 
     // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
     /* Specific commands used for joining*/
     /* Ask if name can be used */
     public boolean checkName(String name) throws IOException {
-        Command command = new Command("NAME", name);
+        Command command = new Command("NAME", name, null, initialTime);
         this.sendCommand(command);
         this.name = name;
         // Wait for someone to deny you a name
@@ -204,15 +200,17 @@ public class GroupChat implements Runnable {
         // If name was reset it means it was denied
         return !this.name.equals("");
         // if name is unique return true and set privilege level
-        // peer.becomeFollower();
     }
  
     // creates join message depending on the IP
     public Command getJoinMessage(Object[] ipSet){
         String message = GroupChat.gson.toJson(ipSet);
-        return new Command("GREETINGS", this.name, message);
+        return new Command("GREETINGS", this.name, message, initialTime);
     }
-
+    public Command getReturnMessage(Object[] ipSet){
+        String message = GroupChat.gson.toJson(ipSet);
+        return new Command("RETURNER", this.name, message);
+    }
 //    public void addLeader(String leaderIPs ){
 //        String[] ipArray= gson.fromJson(leaderIPs, String[].class);
 //        leaderList.addAll(Arrays.asList(ipArray));
@@ -230,16 +228,19 @@ public class GroupChat implements Runnable {
         public final String command;
         public final String name;
         public final String payload;
-        Command(String command, String name, String payload){
+        public final long timeSent;
+        Command(String command, String name, String payload, long ts){
             this.command = command;
             this.name = name;
             this.payload = payload;
+            this.timeSent = ts;
+        }
+        Command(String command, String name, String payload){
+            this(command, name, payload, (new Timestamp(System.currentTimeMillis())).getTime());
         }
 
         Command(String command, String name){
-            this.command = command;
-            this.name = name;
-            payload = null;
+            this(command, name, null);
         }
     }
 }

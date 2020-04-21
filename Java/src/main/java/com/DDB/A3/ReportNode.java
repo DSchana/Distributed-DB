@@ -12,13 +12,14 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
 
 public class ReportNode implements Runnable {
-	private static final int TIMEOUT = 20000, MISSED_THRESHOLD=3;
+	private static final int TIMEOUT = 10000, MISSED_THRESHOLD=3;
 	private static final long MOURNING_PERIOD = TIMEOUT *2; // how long it node wait after leader is presumed dead
 	private PrintStream reportWriter;
 	private BufferedReader reportReader;
@@ -27,10 +28,12 @@ public class ReportNode implements Runnable {
 	private final AtomicBoolean leader;
 	private final ReentrantLock socketWorks =  new ReentrantLock();
 	final Condition socketFree = socketWorks.newCondition();
-	public ReportNode(Peer p) {
+	private int socketNumber ;
+	public ReportNode(Peer p, int socketNumber) {
 		reportWriter = null;
 		reportSocket = new Socket();
 		leader = new AtomicBoolean(false);
+		this.socketNumber = socketNumber;
 		peer = p;
 	}
 
@@ -44,13 +47,13 @@ public class ReportNode implements Runnable {
 			// If we have a new report node then we have to wait for socket to be updated
 			while(!reportSocket.isConnected() || reportSocket.isClosed()){
 				synchronized(socketWorks) {
-					socketWorks.lock(); /* remove all threads waiting for node*/
+					socketWorks.lock(); /* remove all threads waiting for node */
 					Thread t = new Thread(this::findReportNodes);
-					if( !peer.isLeader()) {
+					if( !(peer.isLeader()|| candidate)) {
 						t.start();
 					}
 					try {
-						socketFree.await();
+						socketFree.await(15000, TimeUnit.MILLISECONDS);
 						t.interrupt();
 						t.join();
 					} catch (InterruptedException e) {
@@ -58,10 +61,11 @@ public class ReportNode implements Runnable {
 					}
 				}
 			}
-			System.out.println("In report node main loop");
+			// System.out.println("In report node main loop");
+			
 			/* if an active candidate */
 			if(candidate && !leader.get()){
-				System.out.println("Waiting on that candidate response ");
+//				System.out.println("Waiting on that candidate response ");
 				response = this.getResponse();
 				if(response.equals("ADD")){
 					/* get follower's IP and add follower */
@@ -86,7 +90,7 @@ public class ReportNode implements Runnable {
 					} catch (InterruptedException e) {
 		                e.printStackTrace();
 		            }
-		            // become the leader
+		            // System.out.println("BECAME LEADER");// become the leader
 					peer.setLeaderMode();
 					leader.lazySet(true); 
 				}
@@ -109,9 +113,9 @@ public class ReportNode implements Runnable {
 				}
 			} 
 			else if (response.equals("CANDIDATE")){
-				System.out.println("Received candidate request");
+//				System.out.println("Received candidate request");
 				candidate = true;
-				System.out.println("Became a candidate");
+				// System.out.println("Became a candidate");
 				reportWriter.println("YES");
 			}
 			else if (response.equals("ALIVE?")){
@@ -130,12 +134,12 @@ public class ReportNode implements Runnable {
 		String response = "BYE";
 		try{
 			response = reportReader.readLine().trim();
-			System.out.println("REPORT NODE RECEIVED: " + response);
+//			System.out.println("REPORT NODE RECEIVED: " + response);
 		} catch(SocketTimeoutException e){
-			e.printStackTrace();
+//			e.printStackTrace();
 			response = "MISSED";
 		} catch (IOException e) {
-			e.printStackTrace();
+//			e.printStackTrace();
 		}
 		return response;
 	}
@@ -145,7 +149,7 @@ public class ReportNode implements Runnable {
 	}
 
 	public synchronized void setCandidate(Socket s){
-		System.out.println("MADE A NEW CANDIDATE");
+		// System.out.println("MADE A NEW CANDIDATE");
 		socketWorks.lock();
 		reportSocket = s;
 		socketFree.signalAll();
@@ -155,9 +159,9 @@ public class ReportNode implements Runnable {
 		leader.lazySet(true);
 	}
 	// Close the threads safely
-//	public void close() {
-//		Thread.currentThread().interrupt();
-//	}
+	public void close() {
+		Thread.currentThread().interrupt();
+	}
 
 	// Find or update the node that the current node will send the "heartbeat" signal
 	// If for someone reason things get way out of sync even with the built in wait - then allow manual SWITCH
@@ -165,16 +169,16 @@ public class ReportNode implements Runnable {
 //		System.out.println("Searching for node");
 		// while (!Thread.interrupted()) {
 		// default 80
-		int socketNumber = 2000;
+		
 		try (ServerSocket hostSocket = new ServerSocket(socketNumber)) {
 			socketWorks.lock();
 			hostSocket.setSoTimeout(TIMEOUT); // IO calls should time out after 10 seconds
 			Socket potentialReport = null;
 			while (potentialReport == null && !Thread.interrupted() && !reportSocket.isConnected() && !peer.isLeader()) {
-				System.out.println("Searching for a node");
+//				System.out.println("Searching for a node");
 				try {
 					potentialReport = hostSocket.accept();
-					System.out.println("socket connected " + potentialReport.getRemoteSocketAddress());
+					// System.out.println("socket connected " + potentialReport.getRemoteSocketAddress());
 					potentialReport.setSoTimeout(TIMEOUT);
 
 				} catch(SocketTimeoutException e) {
@@ -183,7 +187,7 @@ public class ReportNode implements Runnable {
 			}
 			
 			if(potentialReport != null){
-				System.out.println("potential report is closed? " + potentialReport.isClosed());
+				// System.out.println("potential report is closed? " + potentialReport.isClosed());
 				reportSocket = potentialReport; // replace the socket
 				reportWriter = new PrintStream(reportSocket.getOutputStream());
 				reportReader = new BufferedReader(new InputStreamReader(reportSocket.getInputStream()));
@@ -193,8 +197,8 @@ public class ReportNode implements Runnable {
 				throw new InterruptedException();
 			}
 		}  catch(SocketException e) {
-			e.printStackTrace();
-			System.err.println("Will remove this in a bit");
+			// e.printStackTrace();
+			// System.err.println("Will remove this in a bit");
 		} catch (IOException e) {
 			System.err.println("ERROR: Socket could not be created, check processes permissions");
 			e.printStackTrace();

@@ -16,8 +16,11 @@ enum Level {
   LEADER_LEVEL
 }
 public class Peer implements Runnable{
-    /* Object used JSON conversion */
-    public final Gson gson;
+    /* The name of the node **  might change to a 64 bit string ** */
+    public String name;
+
+    /* Enum variable used to track state of the node*/
+    public Level level; 
 
     /* Key Value store - used top store data */
     private final KVSNetworkAPI kvs;
@@ -26,21 +29,24 @@ public class Peer implements Runnable{
     *   For candidate nodes it is also where they receive a list of followers to update their list
     */
     public final ReportNode reportNode; // send keep alive signal to this node
+    /* Group chat handles the multi-cast functionality of the program 
+    *   it will be used to accept nodes by leaders
+    *   it will also be used to ensure uniqueness of name 
+    */
+    public final GroupChat gc;
+
+    /* Used to ensure data isn't loss from KVS on node failure
+    *  For the leader node, the backup node is always being changed to the newest node added
+    */
+    public BackupNode backupNode;
 
     /*  list of nodes that node is keeping track of - it will be empty for regular nodes
     *   For candidate nodes the nodes won't be active
     */
     public final LinkedHashSet<FollowerNode> followers;
     
-    /* Enum variable used to track state of the node*/
-    public Level level; 
-
-    /* Group chat handles the multi-cast functionality of the program 
-    *   it will be used to accept nodes by leaders
-    *   it will also be used to ensure uniqueness of name 
-    *   it is also where I plan on implementing remote calls to the KVS store ** UNIMPLMENTED **
-    */
-    public final GroupChat gc;
+    /* Object used JSON conversion */
+    public final Gson gson;
 
     /* The number of maximum follower a node can have */
     public final int MAX_FOLLOWERS = 3; // ** TESTING NORMALLY 25 **
@@ -51,25 +57,29 @@ public class Peer implements Runnable{
     /* Used to keep track of updates to the list */
     private final Set<String> addQueue;
     private final Set<String> deleteQueue;
+    private Config config;
 
-    /*  ** Used to ensure data isn't loss from KVS on node failure ** */
-    // public **some data structure or just String if one Node ** friendNode;
+    private static final String ALPHA_NUMERIC_STRING = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_";
+
     
-
     public static void main(String[] args) throws IOException{
         Peer p = new Peer();
         p.run();
     }
 
     public Peer() throws  IOException{
-        reportNode = new ReportNode(this);
+        // ** get port numbers from peer.config **
+        config = new Config();
+        reportNode = new ReportNode(this,config.targetFollowerSocket);
         kvs = new KVSNetworkAPI();
-        gson = new GsonBuilder().setPrettyPrinting().create();
+        gson = new Gson();
         followers = new LinkedHashSet<>();
         addQueue = new HashSet<>();
         deleteQueue = new HashSet<>();
-        FollowerNode.staticInitialize(this);
-        gc = new GroupChat("224.0.0.1", 80, this);
+        FollowerNode.staticInitialize(this,config.receiveFollowerSocket);
+        KVSNetworkAPI.staticInitialize(this, config.backupTargetPort);
+        gc = new GroupChat(config.groupChatIP, config.groupChatPort, this);
+        backupNode = new BackupNode(config.backupAcceptPort, this);
         level = Level.UNNAMED_MEMBER; // start of as unnamed member
     }
     
@@ -78,26 +88,27 @@ public class Peer implements Runnable{
         // Start listening at its port for a node to become leader and if found then start reporting
         new Thread(reportNode).start(); //
         new Thread(gc).start(); // start listening to appropriate group chats
-        Scanner sc = new Scanner(System.in);
-        // first get name - ** probably change to random 64 bit string **
-        String name;
+        new Thread(backupNode).start();
         try {
-            do{
-                System.out.println("Please choose a username");
-                name = sc.nextLine();
-                System.out.println("Checking for username uniqueness");
-            } while(!gc.checkName(name));
-            System.out.println("Username accepted as unique");
+            name = config.oldName;
+            System.out.println("Creating name");
+            while(name.equals("!nameless") || !gc.checkName(name))
+                name = generateName(config.nameLength);
+            System.out.println("You are " + name);
+            // ** SAVE Name to config file **
             gc.setFollowerLevel();
             joinNetwork(); // node will try to join an existing network
             if(!reportNode.foundNode()){
                 this.setLeaderMode();
                 System.out.println("Became a leader");
             }
-            System.out.println("Past joining");
-//            System.out.println(gc.checkName(name));
+            retrieveOldData();
+            kvs.run(); // run the local loop
         } catch (IOException e) {
             e.printStackTrace();
+        }finally {
+            reportNode.close();
+//            gc.close() // Add a kill thing to all the code to stop properly
         }
 
         // ** new thread allow for manipulation of KVS store locally like old client program **
@@ -129,6 +140,17 @@ public class Peer implements Runnable{
         return (level == Level.LEADER_LEVEL);
     }
 
+    /* Make the name of the node */
+    public String generateName(int count) {
+        StringBuilder builder = new StringBuilder();
+        while (count-- != 0) 
+            builder.append(ALPHA_NUMERIC_STRING.charAt((int)(Math.random()*ALPHA_NUMERIC_STRING.length())));
+        return builder.toString();
+    }
+
+    public String getName(){
+        return name;
+    }
     // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
     /* Handle follower Node interaction with peer node */
     // public boolean needCandidate(){
@@ -175,6 +197,8 @@ public class Peer implements Runnable{
         followers.add(f);
         if(this.isLeader() ){
             f.setCheckBeat(true);
+            kvs.setBackup(reportSocket.getInetAddress().getHostAddress());
+            // make node backup
         }
         /* Send update to follower */
         if(this.isLeader() && reportNode.foundNode()){
@@ -189,8 +213,10 @@ public class Peer implements Runnable{
         FollowerNode f = new FollowerNode(ip);
         new Thread(f).start();
         followers.add(f);
-        if(followers.size() == 1)
+        if(followers.size() == 1){
             f.setCheckBeat(true);
+            // And make leader your backup node
+        }
     }
 
     public void addAllNodes(String json){
@@ -281,10 +307,19 @@ public class Peer implements Runnable{
                     break;
                 }
             }
-        }
-        
+        } 
     }
 
+    public boolean needBackup(){
+        return kvs.needBackup();
+    }
+    public void setBackup(String ip){
+        kvs.setBackup(ip);
+    }
+
+    public void changedBackup(String newBackupInfo){
+        backupNode.informBackupChanged(newBackupInfo);
+    }
     // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
     /* Handle group chat interaction */
     /* Get the KVS store used by node - used by group chat to allow remote manipulation */
@@ -309,7 +344,7 @@ public class Peer implements Runnable{
     public void joinNetwork() throws IOException {
         var ipSet = IpFinder.findIP();
         GroupChat.Command message = gc.getJoinMessage(ipSet); // gets serialized version of join message
-        int tries=3; // ## get from setting ##
+        int tries=config.joinTries; // ## get from setting ##
         System.out.println("Attempting to join network please wait...");
         for(int i=1; i<=tries; i++){
             gc.sendCommand(message);
@@ -326,6 +361,58 @@ public class Peer implements Runnable{
         }
     }
 
+    // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+    /* Handle KVS network API interaction */
+    /* Used by leader node to switch backup node */
+    // private void leaderMakeNewBackupNode(String backupIP){
+    //     // leader will alternate between two ports used to make a connection as a backup node - two avoid collision
+    //     // Connect to new node as backup node
+    //     // give it all the info in it's KVS
+    //     // clear the KVS in the old backup node
+    //     // Disconnect the old backup (since you are disconnecting the backup node won't react)
+    //     // Ask new backup node to make old backup node new backup node
+    // }
 
+    /*Used to add all the old data back to KVS */
+    public void addOldData(HashMap<String, Object> values){
+        kvs.addAll(values);
+    }
+    /* Used by returning node to get back old data */ 
+    private void retrieveOldData() throws IOException {
+        var ipSet = IpFinder.findIP();
+        GroupChat.Command message = gc.getReturnMessage(ipSet); // gets serialized version of join message
+        int tries=config.retrieveTries;
+        System.out.println("Attempt to retrieve old data...");
+        for(int i=1; i<=tries; i++){
+            gc.sendCommand(message);
+            try {
+                if (backupNode.retrievedData()) // Don't want to go to sleep if we have already found a node
+                    throw new InterruptedException();
+                Thread.sleep(5000 * i); // slowly backs off - to give nodes time to process things as needed
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                System.out.println("Got backup data");
+                break;
+            }
+        }
+    }
 
+    /* Every node will their back up if they have a nodes old stuff */
+    public void checkReturner( String name, String ip){
+        /* if we have a kvs in our name send out connect to returner*/
+        backupNode.checkReturner(name, ip , config.backupTargetPort);
+    }
+
+    private static class Config{
+        public final int receiveFollowerSocket = 2001;
+        public final int targetFollowerSocket = 2000;
+        public final int groupChatPort = 80;
+        public final String groupChatIP = "224.0.0.1";
+        public final int backupAcceptPort = 101;
+        public final int backupTargetPort = 100;
+        public final int joinTries = 1;
+        public final int retrieveTries = 3;
+        public final String oldName = "A"; //!nameless
+        public final int nameLength = 4;
+    }
 }

@@ -48,8 +48,7 @@ public class Client {
     /* Main program for client - connect to server */
     public static void runClient(String socketIP, int socketNumber) {
         int command = 8;  // hold clients command
-        String[] commandList = {"insert", "update", "upSert", "get", "delete", "find", "clear",
-            "count"};
+        String[] commandList = {"insert", "update", "upSert", "get", "delete", "find", "clear", "count"};
         String serverResponse; // hold server response
         String output = "";
         // Connect to a server using the IP address and port #
@@ -60,7 +59,7 @@ public class Client {
             while (serverScanner.hasNextLine() ) {
                 // unfortunately Java's scanner is horrible with detecting input when used over a socket
                 if (command < 9)
-                    while (!(serverResponse = serverScanner.nextLine()).trim().equals("END"))
+                    while (!serverSocket.isClosed() && !(serverResponse = serverScanner.nextLine()).trim().equals("END"))
                         System.out.println(serverResponse);
                 userPrompt();
                 command = sc.nextInt(); //if user entered number then get

@@ -37,7 +37,7 @@ public class Singleton {
     public static void runServer(int socketNumber, int maxClients) {
     	kvs = new KeyValueStore<>();
         metaLock = new AtomicBoolean(false);
-        gson = new GsonBuilder().setPrettyPrinting().create();
+        gson = new Gson();
         IpFinder.findIP();
         try (ServerSocket hostSocket = new ServerSocket(socketNumber)) {
             // cap the amount of maximum client

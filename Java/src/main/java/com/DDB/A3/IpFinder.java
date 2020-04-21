@@ -42,7 +42,7 @@ public class IpFinder {
         } catch (Exception e) {
             System.out.println("Server info could not be read");
         }
-        System.out.println(sb);
+        // System.out.println(sb);
         return  sb.toArray();
     }
 

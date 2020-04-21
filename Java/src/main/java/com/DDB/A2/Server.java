@@ -30,7 +30,7 @@ public class Server {
     public static void main(String[] args) {
         kvs = new KeyValueStore<>();
         metaLock = new AtomicBoolean(false);
-        gson = new GsonBuilder().setPrettyPrinting().create();
+        gson = new Gson();
         int socketNumber = 2000, maxClients = 25;
         try {
             // Open configuration file
