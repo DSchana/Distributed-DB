@@ -410,8 +410,8 @@ public class Peer implements Runnable{
         public final String groupChatIP = "224.0.0.1";
         public final int backupAcceptPort = 101;
         public final int backupTargetPort = 100;
-        public final int joinTries = 1;
-        public final int retrieveTries = 3;
+        public final int joinTries = 2;
+        public final int retrieveTries = 2;
         public final String oldName = "A"; //!nameless
         public final int nameLength = 4;
     }

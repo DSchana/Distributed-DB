@@ -154,8 +154,10 @@ public class BackupNode implements Runnable{
                 }
                 if(backupMap.containsKey(name)){
                     backupMap.remove(name);
-                    if(!name.equals("FAILED"))
+                    if(!name.equals("FAILED")){
                         archivalMap.put(name,this.backupKVS);
+                        System.out.println("added archive");
+                    }
                 }
                 try {socket.close();
                 } catch (IOException e) { e.printStackTrace();}

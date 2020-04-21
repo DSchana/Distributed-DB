@@ -53,7 +53,7 @@ public class ReportNode implements Runnable {
 						t.start();
 					}
 					try {
-						socketFree.await(15000, TimeUnit.MILLISECONDS);
+						socketFree.await(5, TimeUnit.SECONDS);
 						t.interrupt();
 						t.join();
 					} catch (InterruptedException e) {
@@ -149,7 +149,7 @@ public class ReportNode implements Runnable {
 	}
 
 	public synchronized void setCandidate(Socket s){
-		// System.out.println("MADE A NEW CANDIDATE");
+		System.out.println("MADE A NEW CANDIDATE");
 		socketWorks.lock();
 		reportSocket = s;
 		socketFree.signalAll();
