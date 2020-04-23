@@ -16,7 +16,6 @@ class Node:
         self.IDs = []
         self.isCentralNode = False
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
         self.selfID = None
         self.selectInput = [self.sock]
         self.selectOutput = []
