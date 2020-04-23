@@ -2,15 +2,13 @@ import socket
 import threading
 from KeyVal import *
 import sys
-import string
 import json
-import random
-import select
 
 class Server:
     def __init__(self, host, port):
         self.host = host
         self.port = port
+<<<<<<< HEAD
         self.keyvals = {}
         self.lock = threading.Lock()
         self.IDs = []
@@ -37,6 +35,14 @@ class Server:
     def idGenerator(self, size = 20):
         chars = string.ascii_letters + string.digits
         return ''.join(random.choice(chars) for _ in range(size))
+=======
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock.bind((self.host, self.port))
+        self.sock.listen(1)
+        self.keyvals = {}
+        self.lock = threading.Lock()
+        self.IDs = 1
+>>>>>>> parent of d688208... non-central server can find existing central server
 
     def sendResponse(self, conn, response):
         responseJSON = json.dumps(response)
@@ -47,6 +53,7 @@ class Server:
     def handler(self, conn, addr):
         while True:
             try:
+<<<<<<< HEAD
                 readable, writable, exceptional = select.select(self.selectInput, self.selectOutput, self.selectInput)
 
                 for s in readable:
@@ -86,6 +93,35 @@ class Server:
                         self.selectOutput.remove(s)
                     s.close()
 
+=======
+                data = conn.recv(1024).decode('utf-8')
+                request = json.loads(data)
+                print(request)
+
+                if (len(request) != 3 or \
+                    "id" not in request or \
+                    "command" not in request or \
+                    "payload" not in request):
+                    print("Received request without valid format")
+                    continue
+                
+                clientID = request["id"]
+                command = request["command"]
+                payload = request["payload"]
+
+                # Build response object
+                responseJSON = {
+                    "id": clientID,
+                    "return": []
+                }
+
+                # For each request object, exec command and add to response object
+                for req in payload:
+                    result = self.execRequest(clientID, command, req)
+                    responseJSON["return"].append(result)
+                
+                self.sendResponse(conn, responseJSON)
+>>>>>>> parent of d688208... non-central server can find existing central server
 
             except Exception as e:
                 # print(type(e))

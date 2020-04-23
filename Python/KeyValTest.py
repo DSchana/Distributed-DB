@@ -9,38 +9,38 @@ while True:
     elif n==0:
         print(mkv.dic)
     elif n==1:
-        mkv.create()
+        mkv.Create()
     elif n==2:
         print("Enter Key")
         x=input()
         print("Enter Value")
         y=input()
-        mkv.insert(x,y)
+        mkv.Insert(x,y)
     elif n==3:
         print("Enter Key")
         x=input()
-        print(mkv.get(x))
+        print(mkv.Get(x))
     elif n==4:
         x=input()
         print("Enter Key")
-        print(mkv.delete(x))
+        print(mkv.Delete(x))
     elif n==5:
         print("Enter Value")
         x=input()
-        print(mkv.find(x))
+        print(mkv.Find(x))
     elif n==6:
         print("Enter Key")
         x=input()
         print("Enter Value")
         y=input()
-        print(mkv.update(x,y))
+        print(mkv.Update(x,y))
     elif n==7:
         print("Enter Key")
         x=input()
         print("Enter Value")
         y=input()
-        print(mkv.upSert(x,y))
+        print(mkv.UpSert(x,y))
     elif n==8:
-        mkv.clear()
+        mkv.Clear()
     elif n==9:
-        print(mkv.count())
+        print(mkv.Count())
