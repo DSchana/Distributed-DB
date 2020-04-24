@@ -22,6 +22,8 @@ class Server:
         self.selfID = None
         self.selectInput = [self.sock]
         self.selectOutput = []
+        self.keyStore = set()
+
 
         # Attempt to contact existing central node
         self.nodeCreateSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -42,7 +44,6 @@ class Server:
 
         except socket.timeout:
             print("Im the central node")
-            self.keyStore = ()
             self.isCentralNode = True
             self.selfID = 1
             self.nonCentralNodes = []
@@ -199,8 +200,6 @@ class Server:
 
             return { "status": 200, "value": result }
 
-
-
     def handler(self, conn, addr):
         while True:
             try:
@@ -229,7 +228,51 @@ class Server:
                                     self.nonCentralNodes.append(newNodeID)
                                     self.sendResponse(conn, responseJSON)
 
+                                # incoming request is from client
+                                clientID = request["id"]
+                                command = request["command"].lower()
+                                payload = request["payload"]
+                                key = payload[0]["key"]
+                                if command == "create":
+                                    self.commandSendSock.sendto(json.dumps(request), ("<broadcast>", 37020))
 
+                                elif command == "insert":
+                                    # send command only if key does not already exist in store
+                                    if (key not in self.keyStore):
+                                        self.keyStore.add(key)
+                                        for (nodeID in random.sample(nonCentralNodes, 3)):
+                                            request["nodeID"] = nodeID
+                                            self.commandSendSock.sendto(json.dumps(request), ("<broadcast>", 37020))
+
+
+                                elif command == "get":
+                                    self.commandSendSock.sendto(json.dumps(request), ("<broadcast>", 37020))
+                                    data = s.recv(1024).decode('utf-8')
+                                    if data:
+                                        response = json.loads(data)
+                                        
+
+                                elif command == "delete":
+                                    if (key in self.keyStore):
+                                        self.keyStore.remove(key)
+                                    self.commandSendSock.sendto(json.dumps(request), ("<broadcast>", 37020))
+
+                                elif command == "find":
+                                    self.commandSendSock.sendto(json.dumps(request), ("<broadcast>", 37020))
+
+                                elif command == "update":
+                                    if (key in self.keyStore):
+                                        self.commandSendSock.sendto(json.dumps(request), ("<broadcast>", 37020))
+
+                                elif command == "upsert":
+                                    if (key in self.keyStore):
+                                        self.commandSendSock.sendto(json.dumps(request), ("<broadcast>", 37020))
+
+                                elif command == "clear":
+                                    self.commandSendSock.sendto(json.dumps(request), ("<broadcast>", 37020))
+
+                                elif command == "count":
+                                    self.commandSendSock.sendto(json.dumps(request), ("<broadcast>", 37020))
 
                                 if ("return" not in request):
                                     self.commandSendSock.sendto(request, ("<broadcast>", 37020))
@@ -268,51 +311,6 @@ class Server:
                     if s in self.selectOutput:
                         self.selectOutput.remove(s)
                     s.close()
-
-                # data = conn.recv(1024).decode('utf-8')
-                # request = json.loads(data)
-                # print(request)
-
-                # # Handle for if self is the central node
-                # if (self.isCentralNode and \
-                #     "command" in request and \
-                #     request["command"] == "contact central node"):
-
-                #     newNodeID = self.idGenerator()
-                #     responseJSON = {
-                #         "id": newNodeID,
-                #         "command": "contact acknowledge"
-                #     }
-                #     self.nonCentralNodes.append(newNodeID)
-
-
-                #     continue
-
-
-                # # Handle for case self is a non-central node
-                # if (len(request) != 3 or \
-                #     "id" not in request or \
-                #     "command" not in request or \
-                #     "payload" not in request):
-                #     print("Received request without valid format")
-                #     continue
-                
-                # clientID = request["id"]
-                # command = request["command"]
-                # payload = request["payload"]
-
-                # # Build response object
-                # responseJSON = {
-                #     "id": clientID,
-                #     "return": []
-                # }
-
-                # # For each request object, exec command and add to response object
-                # for req in payload:
-                #     result = self.execRequest(clientID, command, req)
-                #     responseJSON["return"].append(result)
-                
-                # self.sendResponse(conn, responseJSON)
 
             except Exception as e:
                 # print(type(e))
