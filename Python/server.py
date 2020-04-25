@@ -232,6 +232,7 @@ class Server:
                                 clientID = request["id"]
                                 command = request["command"].lower()
                                 payload = request["payload"]
+                                request["nodeID"] = 1
                                 key = payload[0]["key"]
                                 if command == "create":
                                     self.commandSendSock.sendto(json.dumps(request), ("<broadcast>", 37020))
@@ -240,17 +241,69 @@ class Server:
                                     # send command only if key does not already exist in store
                                     if (key not in self.keyStore):
                                         self.keyStore.add(key)
-                                        for (nodeID in random.sample(nonCentralNodes, 3)):
+                                        for nodeID in random.sample(self.nonCentralNodes, 3):
                                             request["nodeID"] = nodeID
                                             self.commandSendSock.sendto(json.dumps(request), ("<broadcast>", 37020))
 
 
                                 elif command == "get":
+                                    tempID = self.idGenerator()
+                                    request["messageID"] = tempID
                                     self.commandSendSock.sendto(json.dumps(request), ("<broadcast>", 37020))
                                     data = s.recv(1024).decode('utf-8')
-                                    if data:
+                                    response = json.loads(data)
+                                    responseCounter = 1
+                                    notFoundCounter = 0
+                                    foundCounter = 0
+                                    responseNodeIDs = []
+                                    while (response["messageID"] == tempID):
+                                        if response["return"][0]["status"] == 404:
+                                            notFoundCounter = notFoundCounter + 1
+                                            notFoundMessage = response
+                                        else:
+                                            foundCounter = foundCounter + 1
+                                            foundMessage = response
+                                        responseNodeIDs.append(response["nodeID"])
+                                        data = s.recv(1024).decode('utf-8')
                                         response = json.loads(data)
-                                        
+                                        responseCounter = responseCounter + 1
+                                    
+                                    # received expected number of responses, meaning no node failures
+                                    if (responseCounter == len(self.nonCentralNodes)):
+                                        # all responses are false, so (key,val) not found
+                                        if (notFoundCounter == 0):
+                                            self.sendResponse(conn, notFoundMessage)
+                                        # some nodes found the entry for given key
+                                        else:
+                                            self.sendResponse(conn, foundMessage)
+                                            # less than expected number of instances found, so must replicate
+                                            if (foundCounter < 3):
+                                                for nodeID in random.sample(responseIDs, 3 - foundCounter):
+                                                    request["nodeID"] = nodeID
+                                                    self.commandSendSock.sendto(json.dumps(request), ("<broadcast>", 37020))
+                                    # received less than expected number of responses, so assume there was a node failure
+                                    else:
+                                        # no nodes found the key, now must check how many node failures
+                                        # only 1 or 2 failures, so can be sure that (key,val) did not exist
+                                        if (len(self.nonCentralNodes) - responseCounter) < 3 and foundCounter == 0:
+                                            self.sendResponse(conn, notFoundMessage)
+                                        # 3 or more node failures, there is chance that (key,val) did exist but is lost
+                                        else if (len(self.nonCentralNodes) - responseCounter > 2 and foundCounter == 0):
+                                            # if key is found in server store, then val has been lost
+                                            # TODO: custom message to client to notify val has been lost
+                                            if (key in keyStore):
+                                                self.sendResponse(conn, notFoundMessage)
+                                            # key not found in server store, so can safely respond not found
+                                            else:
+                                                self.sendResponse(conn, notFoundMessage)
+                                        # some nodes did find (key,val)
+                                        else:
+                                            self.sendResponse(conn, foundMessage)
+                                            # less than expected number of instances found, so must replicate
+                                            if (foundCounter < 3):
+                                                for nodeID in random.sample(responseIDs, 3 - foundCounter):
+                                                    request["nodeID"] = nodeID
+                                                    self.commandSendSock.sendto(json.dumps(request), ("<broadcast>", 37020))
 
                                 elif command == "delete":
                                     if (key in self.keyStore):
