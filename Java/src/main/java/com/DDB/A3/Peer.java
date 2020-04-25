@@ -3,6 +3,8 @@ package main.java.com.DDB.A3;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
+import java.io.BufferedReader;
+import java.io.FileReader;
 import java.io.IOException;
 import java.net.Socket;
 import java.util.*;
@@ -68,11 +70,16 @@ public class Peer implements Runnable{
     }
 
     public Peer() throws  IOException{
-        // ** get port numbers from peer.config **
-        config = new Config();
+        gson = new Gson();
+        StringBuilder configJson = new StringBuilder();
+        String message;
+        BufferedReader br = new BufferedReader(new FileReader("src/main/java/com/DDB/A3/Peer.config"));
+        while ((message = br.readLine())!= null){
+            configJson.append(message).append(" ");
+        }
+        config = gson.fromJson(configJson.toString(), Config.class);;
         reportNode = new ReportNode(this,config.targetFollowerSocket);
         kvs = new KVSNetworkAPI();
-        gson = new Gson();
         followers = new LinkedHashSet<>();
         addQueue = new HashSet<>();
         deleteQueue = new HashSet<>();
@@ -197,7 +204,7 @@ public class Peer implements Runnable{
         followers.add(f);
         if(this.isLeader() ){
             f.setCheckBeat(true);
-            kvs.setBackup(reportSocket.getInetAddress().getHostAddress());
+            kvs.setBackup(reportSocket.getInetAddress().getHostAddress(), false);
             // make node backup
         }
         /* Send update to follower */
@@ -323,7 +330,7 @@ public class Peer implements Runnable{
         return kvs.needBackup();
     }
     public void setBackup(String ip){
-        kvs.setBackup(ip);
+        kvs.setBackup(ip, false);
     }
 
     public void changedBackup(String newBackupInfo){
@@ -421,15 +428,15 @@ public class Peer implements Runnable{
         backupNode.addArchive(name, data);
     }   
     private static class Config{
-        public final int receiveFollowerSocket = 2001;
-        public final int targetFollowerSocket = 2000;
-        public final int groupChatPort = 80;
-        public final String groupChatIP = "224.0.0.1";
-        public final int backupAcceptPort = 101;
-        public final int backupTargetPort = 100;
-        public final int joinTries = 1;
-        public final int retrieveTries = 2;
-        public final String oldName = "<XXXX>"; //!nameless
-        public final int nameLength = 4;
+        public int receiveFollowerSocket = 2000;
+        public int targetFollowerSocket = 2000;
+        public int groupChatPort = 80;
+        public String groupChatIP = "224.0.0.1";
+        public int backupAcceptPort = 100;
+        public int backupTargetPort = 100;
+        public int joinTries = 2;
+        public int retrieveTries = 3;
+        public String oldName = "!nameless";
+        public int nameLength = 64;
     }
 }

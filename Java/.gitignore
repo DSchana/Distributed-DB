@@ -25,3 +25,4 @@ hs_err_pid*
 # IntelliJ  dump
 /.idea/
 /4680.iml
+/target/

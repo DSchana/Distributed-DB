@@ -1,8 +1,9 @@
 /*  
 *	Backup node class handle the server side part of the buddy system - It has access to the KVS network API
-*	It handle 2 main types of incoming requests
+*	It handle 3 main types of incoming requests
 *   1. Normal backup request - will make a new KVS API to handle as the users back up - will return the next in line
 *   2. Handles request to give back old data 
+*   3. Backing up a back-up once the original node dies
 *	
 */
 
@@ -31,7 +32,7 @@ import java.util.concurrent.Executors;
 public class BackupNode implements Runnable{
 
     /* 
-    *   realistically every node will have a max of 3 nodes open at a time
+    *   In reality every node will have a max of 3 nodes open at a time
     *   right before it switches backup node 
     *   and for a little while and while it is getting back it's old data
     */
@@ -80,11 +81,15 @@ public class BackupNode implements Runnable{
             }
         }
     }
-    public boolean retrievedData(){
-        return  retrieved;
-    }
-    public void run(){
 
+    /* Return if the node has gotten the back-up node*/
+    public boolean retrievedData(){
+        return retrieved;
+    }
+
+    /* Main loop used get actively store the backup nodes */
+    @Override
+    public void run(){
         try (ServerSocket hostSocket = new ServerSocket(socketNumber)) {
             /* cap the amount of maximum backupMap */
             var pool = Executors.newFixedThreadPool(maxClients);
@@ -99,6 +104,7 @@ public class BackupNode implements Runnable{
             e.printStackTrace();
         }
     }
+
     /* inform all nodes about change in back up node so they can change their next in line  */
     public void informBackupChanged(String newBackupInfo) {
         for( var p: backupWriter){
@@ -107,6 +113,7 @@ public class BackupNode implements Runnable{
         }
     }
 
+    /* If our back-up gave us a copy of a new backup then store it */
     public void addArchive(String name, HashMap<String, Object> data){
         if(!archivalMap.containsKey(name)){
             var tmpKVS = new KVSNetworkAPI();
@@ -115,11 +122,14 @@ public class BackupNode implements Runnable{
         }
     }
 
+    /* Once a node receives it's old back up - it will send a multi-cast to delete the old back up 
+    *   this ensure the older copy of the data is no longer stored in the network */
     public void deleteArchive(String name){
         archivalMap.remove(name);
     }
-    private class Backups implements Runnable {
 
+    /* Class used for handling the active back-up in a new thread*/
+    private class Backups implements Runnable {
         private final Socket socket;
         private PrintStream p;
         private BufferedReader r;
@@ -142,17 +152,17 @@ public class BackupNode implements Runnable{
                 /* loop while backupMap is active */
                 do {
                     var json = r.readLine();
-                     System.out.println("JSON"+json);
+                    // System.out.println("JSON"+json);
                     try{
                         command = gson.fromJson(json, KVSCommandObject.class);
                     }catch (NullPointerException e){
-//                        e.printStackTrace();
+                       // e.printStackTrace();
                         break;
                     }
 
                 }while(backupMap.containsKey(name) && this.runCommand(command.command, command.key, command.payload) );
             } catch (IOException e) {
-//                e.printStackTrace();
+               // e.printStackTrace();
             /* necessary because we don't want a crash on one backupMap to break the program */
             } catch (Exception e) {
                 System.out.println("Error:" + socket);
@@ -165,12 +175,13 @@ public class BackupNode implements Runnable{
                         archivalMap.put(name,this.backupKVS);
                         /* Give back up to your back so it is at-least in two nodes*/
                         this.duplicateArchiveKVS(name, this.backupKVS);
-                        System.out.println("added archive");
+                        // System.out.println("added archive");
+                        System.out.println("Node " + name + " died");
                     }
                 }
                 try {socket.close();
                 } catch (IOException e) { e.printStackTrace();}
-                System.out.println("Node " + name + " died");
+                
             }
         }
 

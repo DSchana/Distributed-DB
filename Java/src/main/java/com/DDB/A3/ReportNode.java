@@ -62,11 +62,11 @@ public class ReportNode implements Runnable {
 					}
 				}
 			}
-//			 System.out.println("In report node main loop");
+			// System.out.println("In report node main loop");
 			
 			/* if an active candidate */
 			if(candidate && !leader.get()){
-//				System.out.println("Waiting on that candidate response ");
+				// System.out.println("Waiting on that candidate response ");
 				response = this.getResponse();
 				if(response.equals("ADD")){
 					/* get follower's IP and add follower */
@@ -96,9 +96,11 @@ public class ReportNode implements Runnable {
 					leader.lazySet(true); 
 				}
 
-				if(leader.get()){ // if a leader and your report node died that means you no longer have a candidate
+				/* if a leader and your report node died that means you no longer have a candidate
+				 and if you just became a leader then you are no longer a candidate */
+				if(leader.get()){ 
 					peer.candidateDied();
-					candidate = false; // 
+					candidate = false; 
 				}
 			}
 			else if (response.equals("LEADER")){
@@ -106,11 +108,13 @@ public class ReportNode implements Runnable {
 					reportWriter.println("NO");
 				}
 				else{
-					leader.lazySet(true); /* you are now set to be a leader on next bye you will eave and become leader */
+					/* you are now set to be a leader on next bye you will eave and become leader */
+					leader.lazySet(true); 
 					reportWriter.println("YES");
 					response = this.getResponse();
 					peer.addAllNodes(response);
-					candidate = true; /* as a candidate the leader will go through a mourning period and become a leader */
+					/* as a candidate the leader will go through a mourning period and become a leader */
+					candidate = true; 
 				}
 			} 
 			else if (response.equals("CANDIDATE")){
@@ -135,12 +139,12 @@ public class ReportNode implements Runnable {
 		String response = "BYE";
 		try{
 			response = reportReader.readLine().trim();
-//			System.out.println("REPORT NODE RECEIVED: " + response);
+			// System.out.println("REPORT NODE RECEIVED: " + response);
 		} catch(SocketTimeoutException e){
-//			e.printStackTrace();
+			// e.printStackTrace();
 			response = "MISSED";
 		} catch (IOException e) {
-//			e.printStackTrace();
+			// e.printStackTrace();
 		}
 		return response;
 	}
@@ -150,7 +154,7 @@ public class ReportNode implements Runnable {
 	}
 
 	public synchronized void setCandidate(Socket s){
-		System.out.println("MADE A NEW CANDIDATE");
+		// System.out.println("MADE A NEW CANDIDATE");
 		socketWorks.lock();
 		reportSocket = s;
 		socketFree.signalAll();

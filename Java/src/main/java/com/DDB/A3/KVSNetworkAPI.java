@@ -22,20 +22,16 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /* local 
-    - Allow calls to local call and allow us to make calls to other database
+    - Allow calls to local KVS
 */
 
-/* remote
-    - After getting the local command read any command made from 
-    - one socket to open connection with random node and handle all the command - optional
-*/
 
-/*backup interaction
-    - update backup on every call to KVS
-    - receive update to backup KVS consistently
+/*backup interaction -remote
+    - update backup on every call that changes the KVS
     - one node for all backup interaction
-    - keep track of next in line
+    - keep track of next in line -which will be the new backup once the backup dies
 */
+
 enum KVSCommands {
   QUIT,
   INSERT,
@@ -80,14 +76,15 @@ public class KVSNetworkAPI {
             return "[]";
         return kvs.toString();
     }
+
     /* A one time initialization done at the start of the program*/
     public static void staticInitialize(Peer p, int socketNumber){
         peer = p;
         nextInLinePortNumber =socketNumber;
     }
 
+    /* Main loop that the node will run to allow for local manipulation of KVS*/
     public void run() {
-
         // IpFinder.findIP();
         int commandValue = 8;  // hold clients command
         Scanner sc = new Scanner(System.in);
@@ -99,7 +96,7 @@ public class KVSNetworkAPI {
                     backupWriter.close();
                 backupWriter = null;
                 if (!(nextInLineIP.equals("NONE")) ){
-                    this.setBackup(nextInLineIP);
+                    this.setBackup(nextInLineIP, true);
                 }
             }
                 commandValue = -1;
@@ -287,9 +284,7 @@ public class KVSNetworkAPI {
         return kvs.count();
     }
 
-    /* 
-    *   Return all the key-value pair in the KVS
-    */
+    /*  Return all the key-value pair in the KVS */
     public String getAll(){
         return kvs.toString(); 
     }
@@ -302,11 +297,20 @@ public class KVSNetworkAPI {
     }
 
     /* Function to add in new backup node - called by Peer if leader gave us a backup automatically called */
-    public void setBackup(String ip){
+    public void setBackup(String ip, boolean nodeDied){
         /* Let main program know backup changed so node whose back up you are can be informed*/
         KVSCommandObject command = new KVSCommandObject("backup changed", ip,
                                                     String.valueOf(nextInLinePortNumber));
-        peer.changedBackup( gson.toJson(command));     
+        peer.changedBackup( gson.toJson(command));    
+        if(peer.isLeader() && !nodeDied){
+            lastSocket = backupSocket;
+            this.setNextInLine(lastSocket.getInetAddress().getHostAddress());
+        } 
+        else{
+            lastSocket = null;
+            nextInLineIP = "NONE";
+
+        }
         backupSocket = new Socket();
         try {
             var address =  new InetSocketAddress(InetAddress.getByName(ip), nextInLinePortNumber);
@@ -316,53 +320,54 @@ public class KVSNetworkAPI {
             if(backupSocket.getRemoteSocketAddress().equals(backupSocket.getLocalSocketAddress())){
                 System.err.println("WARNING: Attempted to connect to self - check for multiple running instances");
             }
-        
         } catch (IOException e) {
             e.printStackTrace();
         }
-        this.initializeBackup();
+        this.initializeBackup(nodeDied);
     }
   
-
-    public boolean initializeBackup(){ 
+    /* Function to initialize the back up node so it can send it's data*/
+    public boolean initializeBackup(boolean nodeDied){ 
         PrintStream newWriter = null;
         BufferedReader newReader = null;
         try {
             newWriter = new PrintStream(backupSocket.getOutputStream());
             newReader = new BufferedReader(new InputStreamReader(backupSocket.getInputStream()));
             newWriter.println(peer.getName());
-            System.err.println("My name is "+ peer.getName());
+            // System.err.println("My name is "+ peer.getName());
             do{
                 /* Tell backup node how much items you have*/
                 newWriter.println(this.count());
                 /* Give your backup a copy of your database*/
                 newWriter.println(this.getAll());
-//                while(!newReader.ready()); // wait for stream to become ready
+               // while(!newReader.ready()); // wait for stream to become ready
             } while(!newReader.readLine().trim().equals("SUCCESS"));
-            if(peer.isLeader()){
+            /* If the node is the leader node and just adding the new node to the family it follows a different protocol*/
+            if(peer.isLeader() && !nodeDied){
                 newWriter.println("LEADER");
                 /* If we have last socket send that to the new node to add - otherwise the leader is a lone node and will add itself */
                 if (lastSocket != null && backupWriter != null){
-                    /* If the same node becomes your backup don' relieve it */
+                    /* If the same node becomes your backup don't relieve it */
                     if(!lastSocket.getInetAddress().getHostAddress()
                             .equals(backupSocket.getInetAddress().getHostAddress())) {
                          /*  if old writer is active (will be for leaders) let the back up know you are leaving */
                         backupWriter.println("RELIEVE");
                         backupWriter.close();
                     }
+                    /* Normally leader will set the back up of the new node as equal to it's previous backup node */
                     newWriter.println(lastSocket.getInetAddress().getHostAddress());
-//                    newWriter.println(lastSocket.getPort());
+                   // newWriter.println(lastSocket.getPort());
                 }
+                /* if the leader did not have a back up node it will set itself as the back up node*/
                 else{
                     newWriter.println(backupSocket.getLocalAddress().getHostAddress());
-//                    newWriter.println(backupSocket.getLocalPort());
+                   // newWriter.println(backupSocket.getLocalPort());
                 }
             }
-            /* Normal case: old back up died so you make a new back up */
+            /* Normal case: old back up died so you make a new back up or if leader just gave us the address of our backup node*/
             else{
                 newWriter.println("NORMAL");
                 String ip = newReader.readLine();
-
                 this.setNextInLine(ip);
             }
           
@@ -381,6 +386,7 @@ public class KVSNetworkAPI {
         return backupWriter != null && backupReader != null; 
     }
 
+    /* Used by the backup node to give the newly connected node their next in line backup node in case you die*/
     public String getBackupIP(){
         if(backupSocket == null || !backupSocket.isConnected()){
             return "NONE";
@@ -388,6 +394,7 @@ public class KVSNetworkAPI {
         return backupSocket.getInetAddress().getHostAddress();
     }
 
+    
     public void setNextInLine(String ip){
         if (!(ip.equals(backupSocket.getLocalAddress().getHostAddress()))) {
             // As long as it is not adding itself - it should add the next in line

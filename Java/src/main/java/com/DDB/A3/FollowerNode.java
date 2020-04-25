@@ -178,7 +178,7 @@ public class FollowerNode implements Runnable {
 
     /* Handle closing of node */
     private synchronized void close(){
-        System.out.println("Closing connection on follower with ip-address of " + ip); 
+        // System.out.println("Closing connection on follower with ip-address of " + ip); 
         try{
             if(followerSocket != null && followerSocket.isClosed())
                 followerSocket.close();
