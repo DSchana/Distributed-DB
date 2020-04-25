@@ -73,7 +73,7 @@ class Server:
         conn.sendall(responseJSON.encode())
         return
 
-    def execRequest(self, clientID, command, requestObj):
+    def execRequest(self, clientID, nodeID, command, requestObj):
         command = command.lower()
 
         if command == "create":
@@ -85,7 +85,7 @@ class Server:
 
             return { "status": 204 }
 
-        elif command == "insert":
+        elif command == "insert" and nodeID == self.selfID:
             print("Insert command received")
             if "key" not in requestObj or \
                 "value" not in requestObj:
@@ -278,7 +278,7 @@ class Server:
                                             self.sendResponse(conn, foundMessage)
                                             # less than expected number of instances found, so must replicate
                                             if (foundCounter < 3):
-                                                for nodeID in random.sample(responseIDs, 3 - foundCounter):
+                                                for nodeID in random.sample(responseNodeIDs, 3 - foundCounter):
                                                     request["nodeID"] = nodeID
                                                     self.commandSendSock.sendto(json.dumps(request), ("<broadcast>", 37020))
                                     # received less than expected number of responses, so assume there was a node failure
@@ -288,10 +288,10 @@ class Server:
                                         if (len(self.nonCentralNodes) - responseCounter) < 3 and foundCounter == 0:
                                             self.sendResponse(conn, notFoundMessage)
                                         # 3 or more node failures, there is chance that (key,val) did exist but is lost
-                                        else if (len(self.nonCentralNodes) - responseCounter > 2 and foundCounter == 0):
+                                        elif (len(self.nonCentralNodes) - responseCounter > 2 and foundCounter == 0):
                                             # if key is found in server store, then val has been lost
                                             # TODO: custom message to client to notify val has been lost
-                                            if (key in keyStore):
+                                            if (key in self.keyStore):
                                                 self.sendResponse(conn, notFoundMessage)
                                             # key not found in server store, so can safely respond not found
                                             else:
@@ -301,7 +301,7 @@ class Server:
                                             self.sendResponse(conn, foundMessage)
                                             # less than expected number of instances found, so must replicate
                                             if (foundCounter < 3):
-                                                for nodeID in random.sample(responseIDs, 3 - foundCounter):
+                                                for nodeID in random.sample(responseNodeIDs, 3 - foundCounter):
                                                     request["nodeID"] = nodeID
                                                     self.commandSendSock.sendto(json.dumps(request), ("<broadcast>", 37020))
 
@@ -340,6 +340,7 @@ class Server:
                                 clientID = request["id"]
                                 command = request["command"]
                                 payload = request["payload"]
+                                nodeID = request["nodeID"]
 
                                 # Build response object
                                 responseJSON = {
@@ -349,7 +350,7 @@ class Server:
 
                                 # For each request object, exec command and add to response object
                                 for req in payload:
-                                    result = self.execRequest(clientID, command, req)
+                                    result = self.execRequest(clientID, nodeID, command, req)
                                     responseJSON["return"].append(result)
                                 
                                 self.sendResponse(conn, responseJSON)
